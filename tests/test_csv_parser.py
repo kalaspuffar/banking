@@ -252,15 +252,18 @@ class TestMissingFields:
 class TestEmptyRequiredFields:
     """Tests for rows where required string fields are empty."""
 
-    def test_empty_verification_number_raises_error(self, tmp_path: Path) -> None:
+    def test_empty_verification_number_is_allowed(self, tmp_path: Path) -> None:
+        """Empty verification numbers are valid — some bank transactions lack one."""
         csv_file = tmp_path / "empty_verif.csv"
         csv_file.write_text(
             "Bokföringsdatum;Valutadatum;Verifikationsnummer;Text;Belopp;Saldo\n"
             "2026-01-28;2026-01-28;;Test;-100.000;1000.000\n",
             encoding="utf-8",
         )
-        with pytest.raises(CSVParseError, match="Line 2.*Verifikationsnummer.*empty"):
-            parse_bank_csv(csv_file)
+        result = parse_bank_csv(csv_file)
+
+        assert len(result) == 1
+        assert result[0].verification_number == ""
 
     def test_empty_text_raises_error(self, tmp_path: Path) -> None:
         csv_file = tmp_path / "empty_text.csv"

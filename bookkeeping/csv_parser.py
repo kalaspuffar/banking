@@ -161,11 +161,10 @@ def parse_bank_csv(filepath: Path) -> list[BankTransaction]:
             value_date = _parse_date(
                 row[1], line_number=line_number, field_name="Valutadatum"
             )
+            # Empty verification numbers are valid — some bank transactions
+            # (e.g., interest accruals, fee adjustments) may lack one.
+            # The dedup module treats these as always-new.
             verification_number = row[2].strip()
-            if not verification_number:
-                raise CSVParseError(
-                    f"Line {line_number}: 'Verifikationsnummer' is empty"
-                )
 
             text = row[3].strip()
             if not text:

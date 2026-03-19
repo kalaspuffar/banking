@@ -14,7 +14,7 @@ import piecash
 import pytest
 
 from bookkeeping.dedup import filter_duplicates
-from bookkeeping.models import BankTransaction
+from bookkeeping.models import BankTransaction, GnuCashError
 
 
 # ---------------------------------------------------------------------------
@@ -229,3 +229,44 @@ class TestOrderPreservation:
 
         assert [t.text for t in new] == ["New first", "New second", "New third"]
         assert [t.text for t in duplicates] == ["Dup first", "Dup second"]
+
+
+class TestInvalidBookPath:
+    """Error handling when the GnuCash book file is invalid or missing."""
+
+    def test_nonexistent_book_raises_gnucash_error(self, tmp_path: Path) -> None:
+        transactions = [_make_transaction("1001")]
+        with pytest.raises(GnuCashError, match="Failed to open GnuCash book"):
+            filter_duplicates(transactions, tmp_path / "nonexistent.gnucash")
+
+    def test_corrupt_file_raises_gnucash_error(self, tmp_path: Path) -> None:
+        corrupt_path = tmp_path / "corrupt.gnucash"
+        corrupt_path.write_text("this is not a sqlite file")
+        transactions = [_make_transaction("1001")]
+        with pytest.raises(GnuCashError, match="Failed to open GnuCash book"):
+            filter_duplicates(transactions, corrupt_path)
+
+
+class TestLargerDataset:
+    """Confidence test with a moderately large number of existing transactions."""
+
+    def test_200_existing_transactions(self, tmp_path: Path) -> None:
+        existing_nums = [str(i) for i in range(1, 201)]
+        book_path = tmp_path / "large.gnucash"
+        _create_gnucash_book(book_path, existing_nums=existing_nums)
+
+        # 50 duplicates + 50 new
+        transactions = [
+            _make_transaction(str(i)) for i in range(176, 226)
+        ]
+
+        new, duplicates = filter_duplicates(transactions, book_path)
+
+        assert len(duplicates) == 25  # 176..200 are duplicates
+        assert len(new) == 25         # 201..225 are new
+        assert {t.verification_number for t in duplicates} == {
+            str(i) for i in range(176, 201)
+        }
+        assert {t.verification_number for t in new} == {
+            str(i) for i in range(201, 226)
+        }

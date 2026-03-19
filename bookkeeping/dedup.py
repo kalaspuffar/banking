@@ -11,7 +11,7 @@ from pathlib import Path
 
 import piecash
 
-from bookkeeping.models import BankTransaction
+from bookkeeping.models import BankTransaction, GnuCashError
 
 
 def filter_duplicates(
@@ -57,10 +57,19 @@ def _load_existing_nums(gnucash_book_path: Path) -> set[str]:
 
     Returns:
         A set of existing transaction ``num`` strings for O(1) lookup.
+
+    Raises:
+        GnuCashError: If the book file cannot be opened (missing, corrupt,
+            or not a valid GnuCash SQLite file).
     """
-    with piecash.open_book(str(gnucash_book_path), readonly=True) as book:
-        return {
-            txn.num
-            for txn in book.transactions
-            if txn.num
-        }
+    try:
+        with piecash.open_book(str(gnucash_book_path), readonly=True) as book:
+            return {
+                txn.num
+                for txn in book.transactions
+                if txn.num
+            }
+    except Exception as exc:
+        raise GnuCashError(
+            f"Failed to open GnuCash book at {gnucash_book_path}: {exc}"
+        ) from exc
