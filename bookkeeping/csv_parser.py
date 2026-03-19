@@ -74,7 +74,8 @@ def _parse_amount(value: str, *, line_number: int, field_name: str) -> Decimal:
 
     The bank exports amounts with three decimal places (e.g., "-125.000").
     The third decimal is always zero — a Swedish convention. This function
-    parses the string directly as a Decimal and quantizes to two places.
+    parses the string directly as a Decimal, validates that no sub-öre
+    precision would be lost, and quantizes to two decimal places.
 
     Args:
         value: Amount string to parse (e.g., "-125.000", "10000.000").
@@ -85,10 +86,18 @@ def _parse_amount(value: str, *, line_number: int, field_name: str) -> Decimal:
         Decimal value quantized to two decimal places.
 
     Raises:
-        CSVParseError: When the amount string cannot be parsed as a Decimal.
+        CSVParseError: When the amount string cannot be parsed as a Decimal,
+            or when quantizing would lose sub-öre precision.
     """
     try:
-        return Decimal(value.strip()).quantize(Decimal("0.01"))
+        raw = Decimal(value.strip())
+        quantized = raw.quantize(Decimal("0.01"))
+        if raw != quantized:
+            raise CSVParseError(
+                f"Line {line_number}: amount in '{field_name}' has non-zero "
+                f"sub-öre digit: {value!r}"
+            )
+        return quantized
     except (InvalidOperation, AttributeError) as exc:
         raise CSVParseError(
             f"Line {line_number}: invalid amount in '{field_name}': {value!r}"
@@ -126,10 +135,19 @@ def parse_bank_csv(filepath: Path) -> list[BankTransaction]:
         _validate_headers(headers)
 
         # Parse data rows (line_number starts at 2 because row 1 is the header)
+        blank_row_seen_at: int | None = None
         for line_number, row in enumerate(reader, start=2):
-            # Skip blank trailing rows
             if not any(field.strip() for field in row):
+                if blank_row_seen_at is None:
+                    blank_row_seen_at = line_number
                 continue
+
+            # A non-blank row after a blank row indicates a corrupt file.
+            if blank_row_seen_at is not None:
+                raise CSVParseError(
+                    f"Line {line_number}: data row found after blank row "
+                    f"at line {blank_row_seen_at} — file may be corrupt"
+                )
 
             if len(row) != _FIELD_COUNT:
                 raise CSVParseError(
@@ -144,7 +162,16 @@ def parse_bank_csv(filepath: Path) -> list[BankTransaction]:
                 row[1], line_number=line_number, field_name="Valutadatum"
             )
             verification_number = row[2].strip()
+            if not verification_number:
+                raise CSVParseError(
+                    f"Line {line_number}: 'Verifikationsnummer' is empty"
+                )
+
             text = row[3].strip()
+            if not text:
+                raise CSVParseError(
+                    f"Line {line_number}: 'Text' is empty"
+                )
             amount = _parse_amount(
                 row[4], line_number=line_number, field_name="Belopp"
             )

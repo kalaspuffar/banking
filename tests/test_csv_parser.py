@@ -12,6 +12,7 @@ from bookkeeping.csv_parser import parse_bank_csv
 from bookkeeping.models import BankTransaction, CSVParseError
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
+REPO_ROOT = Path(__file__).parent.parent
 
 
 # ---------------------------------------------------------------------------
@@ -21,7 +22,7 @@ FIXTURES_DIR = Path(__file__).parent / "fixtures"
 class TestValidCSVParsing:
     """Tests for successful parsing of well-formed CSV files."""
 
-    def test_parse_sample_fixture(self, tmp_path: Path) -> None:
+    def test_parse_sample_fixture(self) -> None:
         """The sample fixture file parses into the expected number of transactions."""
         result = parse_bank_csv(FIXTURES_DIR / "sample_bank.csv")
         assert len(result) == 6
@@ -57,6 +58,50 @@ class TestValidCSVParsing:
         result = parse_bank_csv(FIXTURES_DIR / "sample_bank.csv")
         texts = {t.text for t in result}
         assert "Hyra kontor" in texts
+
+
+# ---------------------------------------------------------------------------
+# Integration test against real account.csv (Issue 2)
+# ---------------------------------------------------------------------------
+
+class TestRealAccountCSV:
+    """Integration tests that parse the actual account.csv from the repo root."""
+
+    @pytest.fixture()
+    def account_csv(self) -> Path:
+        path = REPO_ROOT / "account.csv"
+        if not path.exists():
+            pytest.skip("account.csv not present in repo root")
+        return path
+
+    def test_parse_account_csv_row_count(self, account_csv: Path) -> None:
+        """The real account.csv parses into the expected number of rows."""
+        result = parse_bank_csv(account_csv)
+        assert len(result) == 6
+
+    def test_parse_account_csv_spot_check_first_row(self, account_csv: Path) -> None:
+        """Spot-check a known transaction from account.csv."""
+        result = parse_bank_csv(account_csv)
+        # Earliest by booking_date: two rows on 2026-01-02
+        earliest_pair = [t for t in result if t.booking_date == date(2026, 1, 2)]
+        assert len(earliest_pair) == 2
+        amounts = {t.amount for t in earliest_pair}
+        assert Decimal("-113.58") in amounts
+        assert Decimal("-14.58") in amounts
+
+    def test_parse_account_csv_text_with_date_suffix(
+        self, account_csv: Path
+    ) -> None:
+        """Text fields containing date suffixes (e.g., 'test2/26-01-23') are preserved."""
+        result = parse_bank_csv(account_csv)
+        texts = {t.text for t in result}
+        assert "test2/26-01-23" in texts
+
+    def test_parse_account_csv_non_round_amount(self, account_csv: Path) -> None:
+        """Non-round amounts like -37.88 are parsed correctly."""
+        result = parse_bank_csv(account_csv)
+        amounts = {t.amount for t in result}
+        assert Decimal("-37.88") in amounts
 
 
 class TestEmptyCSV:
@@ -159,6 +204,28 @@ class TestMalformedAmounts:
         with pytest.raises(CSVParseError, match="Line 2.*invalid amount.*Saldo"):
             parse_bank_csv(csv_file)
 
+    def test_sub_ore_amount_raises_error(self, tmp_path: Path) -> None:
+        """An amount with a non-zero third decimal (sub-öre) is rejected."""
+        csv_file = tmp_path / "sub_ore.csv"
+        csv_file.write_text(
+            "Bokföringsdatum;Valutadatum;Verifikationsnummer;Text;Belopp;Saldo\n"
+            "2026-01-28;2026-01-28;12345;Test;-100.005;1000.000\n",
+            encoding="utf-8",
+        )
+        with pytest.raises(CSVParseError, match="sub-öre"):
+            parse_bank_csv(csv_file)
+
+    def test_sub_ore_balance_raises_error(self, tmp_path: Path) -> None:
+        """A balance with a non-zero third decimal (sub-öre) is rejected."""
+        csv_file = tmp_path / "sub_ore_bal.csv"
+        csv_file.write_text(
+            "Bokföringsdatum;Valutadatum;Verifikationsnummer;Text;Belopp;Saldo\n"
+            "2026-01-28;2026-01-28;12345;Test;-100.000;1000.005\n",
+            encoding="utf-8",
+        )
+        with pytest.raises(CSVParseError, match="sub-öre"):
+            parse_bank_csv(csv_file)
+
 
 # ---------------------------------------------------------------------------
 # Missing fields
@@ -179,7 +246,81 @@ class TestMissingFields:
 
 
 # ---------------------------------------------------------------------------
-# Edge cases (Task 3.2)
+# Empty required fields (Issue 6)
+# ---------------------------------------------------------------------------
+
+class TestEmptyRequiredFields:
+    """Tests for rows where required string fields are empty."""
+
+    def test_empty_verification_number_raises_error(self, tmp_path: Path) -> None:
+        csv_file = tmp_path / "empty_verif.csv"
+        csv_file.write_text(
+            "Bokföringsdatum;Valutadatum;Verifikationsnummer;Text;Belopp;Saldo\n"
+            "2026-01-28;2026-01-28;;Test;-100.000;1000.000\n",
+            encoding="utf-8",
+        )
+        with pytest.raises(CSVParseError, match="Line 2.*Verifikationsnummer.*empty"):
+            parse_bank_csv(csv_file)
+
+    def test_empty_text_raises_error(self, tmp_path: Path) -> None:
+        csv_file = tmp_path / "empty_text.csv"
+        csv_file.write_text(
+            "Bokföringsdatum;Valutadatum;Verifikationsnummer;Text;Belopp;Saldo\n"
+            "2026-01-28;2026-01-28;12345;;-100.000;1000.000\n",
+            encoding="utf-8",
+        )
+        with pytest.raises(CSVParseError, match="Line 2.*Text.*empty"):
+            parse_bank_csv(csv_file)
+
+
+# ---------------------------------------------------------------------------
+# FileNotFoundError (Issue 5)
+# ---------------------------------------------------------------------------
+
+class TestFileNotFound:
+    """Tests for missing file handling."""
+
+    def test_nonexistent_file_raises_file_not_found(self, tmp_path: Path) -> None:
+        with pytest.raises(FileNotFoundError):
+            parse_bank_csv(tmp_path / "nonexistent.csv")
+
+
+# ---------------------------------------------------------------------------
+# Blank row handling (Issue 3)
+# ---------------------------------------------------------------------------
+
+class TestBlankRowHandling:
+    """Tests for blank rows in CSV files."""
+
+    def test_trailing_blank_rows_are_skipped(self, tmp_path: Path) -> None:
+        """Blank rows at the end of the file are silently ignored."""
+        csv_file = tmp_path / "trailing_blank.csv"
+        csv_file.write_text(
+            "Bokföringsdatum;Valutadatum;Verifikationsnummer;Text;Belopp;Saldo\n"
+            "2026-01-28;2026-01-28;12345;Test;-100.000;1000.000\n"
+            "\n"
+            "\n",
+            encoding="utf-8",
+        )
+        result = parse_bank_csv(csv_file)
+        assert len(result) == 1
+
+    def test_blank_row_in_middle_raises_error(self, tmp_path: Path) -> None:
+        """A blank row followed by data rows indicates a corrupt file."""
+        csv_file = tmp_path / "mid_blank.csv"
+        csv_file.write_text(
+            "Bokföringsdatum;Valutadatum;Verifikationsnummer;Text;Belopp;Saldo\n"
+            "2026-01-28;2026-01-28;12345;Test;-100.000;1000.000\n"
+            "\n"
+            "2026-01-29;2026-01-29;12346;Test2;-200.000;800.000\n",
+            encoding="utf-8",
+        )
+        with pytest.raises(CSVParseError, match="data row found after blank row"):
+            parse_bank_csv(csv_file)
+
+
+# ---------------------------------------------------------------------------
+# Edge cases
 # ---------------------------------------------------------------------------
 
 class TestEdgeCases:
