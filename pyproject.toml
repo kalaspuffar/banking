@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "bokforing"
+version = "0.1.0"
+description = "Swedish bookkeeping automation tools for GnuCash"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+dependencies = [
+    "piecash>=1.2.0",
+    "weasyprint>=60.0",
+    "Jinja2>=3.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+]
+
+[project.scripts]
+bokforing = "bokforing.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["bokforing*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
