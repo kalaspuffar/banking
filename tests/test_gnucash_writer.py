@@ -8,6 +8,7 @@ and verifies outcomes.
 from __future__ import annotations
 
 import filecmp
+import shutil
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -244,7 +245,6 @@ class TestBackup:
     ) -> None:
         # Take a reference copy of the original book before writing
         reference_copy = tmp_path / "reference.gnucash"
-        import shutil
         shutil.copy2(gnucash_book, reference_copy)
 
         entry = JournalEntry(
@@ -265,3 +265,53 @@ class TestBackup:
 
         # The backup should match the original (pre-write) content
         assert filecmp.cmp(backups[-1], reference_copy, shallow=False)
+
+
+# ------------------------------------------------------------------
+# 4.8 — Empty entries list
+# ------------------------------------------------------------------
+
+class TestEmptyEntries:
+    """Calling write_transactions with no entries returns immediately."""
+
+    def test_empty_list_returns_zero(self, gnucash_book: Path) -> None:
+        result = write_transactions(gnucash_book, [])
+
+        assert result == ImportResult(transactions_written=0)
+
+        # No backup should have been created
+        backups = list(gnucash_book.parent.glob(f"{gnucash_book.name}.backup.*"))
+        assert len(backups) == 0, "Backup created for empty entries list"
+
+
+# ------------------------------------------------------------------
+# 4.9 — Lock file detection
+# ------------------------------------------------------------------
+
+class TestLockDetection:
+    """A lock row in the gnclock table triggers a clear GnuCashError."""
+
+    def test_locked_book_raises_gnucash_error(self, gnucash_book: Path) -> None:
+        # Insert a fake lock row into the gnclock table as GnuCash would
+        import sqlite3
+
+        conn = sqlite3.connect(str(gnucash_book))
+        conn.execute(
+            "INSERT INTO gnclock (hostname, pid) VALUES (?, ?)",
+            ("fakehost", 99999),
+        )
+        conn.commit()
+        conn.close()
+
+        entry = JournalEntry(
+            verification_number="50001",
+            entry_date=date(2026, 6, 1),
+            description="Should fail due to lock",
+            splits=(
+                JournalEntrySplit(account_code=1930, amount=Decimal("100.00")),
+                JournalEntrySplit(account_code=3010, amount=Decimal("-100.00")),
+            ),
+        )
+
+        with pytest.raises(GnuCashError, match="locked"):
+            write_transactions(gnucash_book, [entry])

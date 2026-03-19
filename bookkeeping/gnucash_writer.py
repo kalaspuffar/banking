@@ -107,6 +107,9 @@ def write_transactions(
         GnuCashError: If the book file does not exist, is locked, or a
             required account code is not found.
     """
+    if not entries:
+        return ImportResult(transactions_written=0)
+
     if not gnucash_book_path.exists():
         raise GnuCashError(
             f"GnuCash book not found: {gnucash_book_path}"
@@ -134,7 +137,7 @@ def write_transactions(
 
             # Create transactions
             for entry in entries:
-                txn = piecash.Transaction(
+                _txn = piecash.Transaction(  # noqa: F841 — piecash registers via constructor
                     currency=currency,
                     description=entry.description,
                     post_date=entry.entry_date,
@@ -158,7 +161,8 @@ def write_transactions(
         if "lock" in exc_msg or "locked" in exc_msg:
             raise GnuCashError(
                 "The GnuCash book is locked — is it open in GnuCash? "
-                "Close GnuCash and try again."
+                "Close GnuCash and try again. If GnuCash is not running, "
+                "delete the .LCK file next to the book."
             ) from exc
         raise GnuCashError(
             f"Failed to write transactions to GnuCash: {exc}"
