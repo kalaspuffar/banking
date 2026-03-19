@@ -27,16 +27,18 @@ from bookkeeping.models import (
 # ---------------------------------------------------------------------------
 
 class TestBankTransactionValidation:
-    def test_rejects_empty_verification_number(self) -> None:
-        with pytest.raises(ValueError, match="verification_number must be non-empty"):
-            BankTransaction(
-                booking_date=date(2026, 1, 1),
-                value_date=date(2026, 1, 1),
-                verification_number="",
-                text="Test",
-                amount=Decimal("0"),
-                balance=Decimal("0"),
-            )
+    def test_accepts_empty_verification_number(self) -> None:
+        """Transactions without a Verifikationsnummer are valid; the dedup
+        module treats them as always-new."""
+        txn = BankTransaction(
+            booking_date=date(2026, 1, 1),
+            value_date=date(2026, 1, 1),
+            verification_number="",
+            text="Test",
+            amount=Decimal("0"),
+            balance=Decimal("0"),
+        )
+        assert txn.verification_number == ""
 
     def test_rejects_float_amount(self) -> None:
         with pytest.raises(TypeError, match="amount must be Decimal"):

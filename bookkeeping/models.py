@@ -68,8 +68,8 @@ class BankTransaction:
     balance: Decimal
 
     def __post_init__(self) -> None:
-        if not self.verification_number:
-            raise ValueError("verification_number must be non-empty")
+        # verification_number may be empty for transactions that lack one;
+        # the dedup module treats these as always-new.
         if not isinstance(self.amount, Decimal):
             raise TypeError(f"amount must be Decimal, got {type(self.amount).__name__}")
         if not isinstance(self.balance, Decimal):
