@@ -12,3 +12,4 @@ rapporter/
 .env
 .idea/
 .vscode/
+/openspec
