@@ -60,9 +60,9 @@ The system SHALL generate an NE-bilaga summary that maps GnuCash account totals 
 ### Requirement: Grundbok — chronological journal
 The system SHALL generate a grundbok report listing all transactions for the fiscal year in chronological order.
 
-#### Scenario: Transactions sorted by date and verifikationsnummer
+#### Scenario: Transactions sorted by date and verification_number
 - **WHEN** the GnuCash book contains transactions on multiple dates
-- **THEN** the grundbok lists them sorted by date first, then by verifikationsnummer
+- **THEN** the grundbok lists them sorted by date first, then by verification_number
 
 #### Scenario: Transaction columns
 - **WHEN** a transaction is rendered in the grundbok
@@ -95,7 +95,7 @@ The system SHALL generate a huvudbok report grouping all transactions by BAS acc
 The system SHALL include company information (name, organisationsnummer, address, fiscal year) in the header of every generated report.
 
 #### Scenario: Report header content
-- **WHEN** any report is generated with company_info containing name="Test AB" and org_nummer="551234-5678"
+- **WHEN** any report is generated with company_info containing name="Test AB" and org_number="551234-5678"
 - **THEN** the PDF header shows "Test AB" and "551234-5678"
 
 ### Requirement: Page numbers in all reports

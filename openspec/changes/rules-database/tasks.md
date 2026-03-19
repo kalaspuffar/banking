@@ -1,6 +1,6 @@
 ## 1. Module Setup and Schema Constants
 
-- [ ] 1.1 Create `bokforing/rules_db.py` with SQL schema constants for `rules`, `config`, and `import_log` tables matching SPECIFICATION.md section 4.2
+- [ ] 1.1 Create `bookkeeping/rules_db.py` with SQL schema constants for `rules`, `config`, and `import_log` tables matching SPECIFICATION.md section 4.2
 - [ ] 1.2 Define `CREATE TABLE` and `CREATE INDEX` statements as module-level string constants
 
 ## 2. Database Initialization

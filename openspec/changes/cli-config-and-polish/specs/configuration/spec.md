@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: ConfigManager class
-The system SHALL provide a `ConfigManager` class in `bokforing/config.py` that reads and writes configuration key-value pairs from the `config` table in rules.db.
+The system SHALL provide a `ConfigManager` class in `bookkeeping/config.py` that reads and writes configuration key-value pairs from the `config` table in rules.db.
 
 #### Scenario: Read existing config value
 - **WHEN** `config_manager.get("gnucash_book_path")` is called and the key exists
@@ -20,7 +20,7 @@ The system SHALL provide a `ConfigManager` class in `bokforing/config.py` that r
 - **THEN** the key-value pair is stored in the config table (inserted or updated if already exists)
 
 ### Requirement: Supported config keys
-The system SHALL support the following configuration keys: `gnucash_book_path`, `company_name`, `org_nummer`, `company_address`.
+The system SHALL support the following configuration keys: `gnucash_book_path`, `company_name`, `org_number`, `company_address`.
 
 #### Scenario: All config keys are settable and retrievable
 - **WHEN** each supported key is set via `config_manager.set()` and then read via `config_manager.get()`
@@ -53,4 +53,4 @@ The system SHALL provide a method to construct a `CompanyInfo` dataclass instanc
 
 #### Scenario: Build CompanyInfo from config
 - **WHEN** `config_manager.get_company_info(fiscal_year=2025)` is called with all config keys set
-- **THEN** a `CompanyInfo` object is returned with name, org_nummer, address, and the specified fiscal_year
+- **THEN** a `CompanyInfo` object is returned with name, org_number, address, and the specified fiscal_year

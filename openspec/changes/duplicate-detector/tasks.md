@@ -1,6 +1,6 @@
 ## 1. Dedup Module Implementation
 
-- [ ] 1.1 Create `bokforing/dedup.py` with the `filter_duplicates` function signature accepting `list[BankTransaction]` and `Path` to GnuCash book, returning `tuple[list[BankTransaction], list[BankTransaction]]`
+- [ ] 1.1 Create `bookkeeping/dedup.py` with the `filter_duplicates` function signature accepting `list[BankTransaction]` and `Path` to GnuCash book, returning `tuple[list[BankTransaction], list[BankTransaction]]`
 - [ ] 1.2 Implement GnuCash book opening with `piecash.open_book(gnucash_book_path, readonly=True)` as a context manager
 - [ ] 1.3 Extract all existing transaction `num` fields into a `set[str]`, filtering out empty/None values
 - [ ] 1.4 Partition input transactions: iterate the input list and classify each transaction as new (Verifikationsnummer not in the set or empty) or duplicate (Verifikationsnummer found in the set)

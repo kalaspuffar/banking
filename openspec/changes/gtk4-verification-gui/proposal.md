@@ -6,7 +6,7 @@ Without this GUI, the user would need to confirm each transaction individually v
 
 ## What Changes
 
-- Implement `bokforing/gtk_app.py` with a GTK4 application (`Gtk.Application` subclass)
+- Implement `bookkeeping/gtk_app.py` with a GTK4 application (`Gtk.Application` subclass)
 - Transaction table with columns: Datum, Text, Belopp, Konto, Moms
 - Searchable account selector using BAS 2023 chart of accounts
 - Visual indicators for categorized rows (filled square) vs uncategorized rows (question mark)
@@ -24,7 +24,7 @@ Without this GUI, the user would need to confirm each transaction individually v
 
 ## Impact
 
-- **Code**: New module `bokforing/gtk_app.py` and basic test file `tests/test_gtk_app.py`
+- **Code**: New module `bookkeeping/gtk_app.py` and basic test file `tests/test_gtk_app.py`
 - **Dependencies**: Requires PyGObject and GTK4 system packages (`python3-gi`, `gir1.2-gtk-4.0`). These are system-level dependencies installed via apt, not pip.
 - **Data**: Consumes `list[CategorizationSuggestion]` from the categorization engine; produces `list[JournalEntry]` for the GnuCash writer. Also triggers rule updates on save.
 - **Integration**: Depends on Phase 1 modules: `categorizer`, `gnucash_writer`, `rules_db`, `models`

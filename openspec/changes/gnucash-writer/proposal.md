@@ -6,7 +6,7 @@ The writer must be reliable above all else: it operates on the user's real finan
 
 ## What Changes
 
-- Implement `bokforing/gnucash_writer.py` with `write_transactions(gnucash_book_path: Path, entries: list[JournalEntry]) -> ImportResult`
+- Implement `bookkeeping/gnucash_writer.py` with `write_transactions(gnucash_book_path: Path, entries: list[JournalEntry]) -> ImportResult`
 - Uses piecash to open the GnuCash SQLite book and create Transaction/Split objects
 - Looks up BAS accounts by `code` field (the BAS account number stored in GnuCash)
 - Stores Verifikationsnummer in the transaction `num` field for deduplication
@@ -24,7 +24,7 @@ The writer must be reliable above all else: it operates on the user's real finan
 
 ## Impact
 
-- **Code**: New module `bokforing/gnucash_writer.py` and test file `tests/test_gnucash_writer.py`
+- **Code**: New module `bookkeeping/gnucash_writer.py` and test file `tests/test_gnucash_writer.py`
 - **Dependencies**: Requires `piecash>=1.2.0` (pip-installable, pure Python)
 - **Data**: Writes to the user's GnuCash SQLite file — destructive operation mitigated by automatic backup
 - **Interfaces**: Consumes `JournalEntry` objects (from models.py), produces `ImportResult` with counts and errors

@@ -1,6 +1,6 @@
 ## 1. VAT Module Setup
 
-- [ ] 1.1 Create `bokforing/vat.py` with module docstring explaining its purpose (VAT splitting for Swedish bookkeeping)
+- [ ] 1.1 Create `bookkeeping/vat.py` with module docstring explaining its purpose (VAT splitting for Swedish bookkeeping)
 - [ ] 1.2 Define `SUPPORTED_VAT_RATES` as a module-level frozenset: `{Decimal("0"), Decimal("6"), Decimal("12"), Decimal("25")}`
 - [ ] 1.3 Define `VATSplit` dataclass with fields `net_amount: Decimal` and `vat_amount: Decimal`
 

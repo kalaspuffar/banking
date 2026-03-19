@@ -37,6 +37,6 @@ The categorization engine is the intelligence layer of the import pipeline. Afte
 
 ## Risks / Trade-offs
 
-- **[Risk] Overly broad contains patterns match wrong transactions** → Mitigation: exact matches always take priority; users can delete or refine rules via `bokforing rules` CLI
+- **[Risk] Overly broad contains patterns match wrong transactions** → Mitigation: exact matches always take priority; users can delete or refine rules via `bookkeeping rules` CLI
 - **[Risk] Date suffix regex doesn't cover all bank date formats** → Mitigation: start with observed `/YY-MM-DD` format; extend regex if other formats appear in real data
 - **[Trade-off] No fuzzy/ML matching limits accuracy for new vendors** → Acceptable: the GUI handles uncategorized transactions, and rules accumulate over time

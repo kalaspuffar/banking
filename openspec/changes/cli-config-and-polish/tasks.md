@@ -1,20 +1,20 @@
 ## 1. Configuration Management
 
-- [ ] 1.1 Implement `bokforing/config.py` with `ConfigManager` class: `__init__(db_path)`, `get(key, default=None)`, `set(key, value)`, idempotent config table creation
+- [ ] 1.1 Implement `bookkeeping/config.py` with `ConfigManager` class: `__init__(db_path)`, `get(key, default=None)`, `set(key, value)`, idempotent config table creation
 - [ ] 1.2 Implement `find_default_book_path()` method that searches `~/.local/share/gnucash/` for `.gnucash` files
 - [ ] 1.3 Implement `get_company_info(fiscal_year)` method that constructs a `CompanyInfo` dataclass from stored config values
 - [ ] 1.4 Write unit tests in `tests/test_config.py` for ConfigManager: get/set, missing keys, defaults, table creation idempotency
 
 ## 2. Init Wizard
 
-- [ ] 2.1 Implement the `init` subcommand handler that creates `~/.local/share/bokforing/` directory and `rules.db` database
-- [ ] 2.2 Implement interactive prompts for GnuCash book path (with default from `find_default_book_path()`), company name, org_nummer, and company address
+- [ ] 2.1 Implement the `init` subcommand handler that creates `~/.local/share/bookkeeping/` directory and `rules.db` database
+- [ ] 2.2 Implement interactive prompts for GnuCash book path (with default from `find_default_book_path()`), company name, org_number, and company address
 - [ ] 2.3 Validate that the provided GnuCash book path exists and is a valid file before saving
 - [ ] 2.4 Support re-running init: show current values as defaults and allow updates
 
 ## 3. CLI Argument Parsing
 
-- [ ] 3.1 Implement full argparse structure in `bokforing/cli.py` with subparsers for: `import`, `report`, `rules`, `config`, `init`
+- [ ] 3.1 Implement full argparse structure in `bookkeeping/cli.py` with subparsers for: `import`, `report`, `rules`, `config`, `init`
 - [ ] 3.2 Implement `import` subparser with positional `csv_file` argument and optional `--book`, `--dry-run`, `--no-gui` flags
 - [ ] 3.3 Implement `report` subparser with positional `type` (choices: moms, ne, grundbok, huvudbok, all) and `year` arguments, plus optional `--book` and `--output-dir` flags
 - [ ] 3.4 Implement `rules` subparser with sub-subcommands: `list`, `delete <id>`, `export <file>`, `import <file>`

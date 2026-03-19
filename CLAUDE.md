@@ -12,6 +12,23 @@ This is a **Swedish bookkeeping/accounting project** in the requirements and des
 - **BAS 2023**: `bas2023.csv` contains the Swedish BAS 2023 chart of accounts (kontoplan), which is the standard account numbering system used in Swedish bookkeeping.
 - **account.csv**: Sample bank transaction export with columns: Bokföringsdatum, Valutadatum, Verifikationsnummer, Text, Belopp, Saldo.
 
+## Code Language Convention
+
+**All code MUST use English naming** — package names, module names, class names, function names, variable names, and field names. Swedish is the domain language (the bank CSV columns, BAS account names, tax form references, and UI labels are Swedish), but all identifiers in Python code are English. This avoids mixing languages in the implementation.
+
+Key mappings from Swedish domain terms to English code names:
+| Swedish (domain/CSV) | English (code) |
+|---|---|
+| Bokföringsdatum | booking_date |
+| Valutadatum | value_date |
+| Verifikationsnummer | verification_number |
+| Belopp | amount |
+| Saldo | balance |
+| Beskrivning | description |
+| Organisationsnummer | org_number |
+
+Package name: `bookkeeping` (not `bokforing`).
+
 ## Workflow
 
 This project uses the **OpenSpec spec-driven workflow** via Claude Code skills and slash commands (`/opsx:*`). The workflow phases are:

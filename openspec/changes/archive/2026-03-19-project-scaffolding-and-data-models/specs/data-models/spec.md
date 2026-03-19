@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: BankTransaction dataclass
-The system SHALL define a frozen dataclass `BankTransaction` with fields: `bokforingsdatum` (date), `valutadatum` (date), `verifikationsnummer` (str), `text` (str), `belopp` (Decimal), `saldo` (Decimal).
+The system SHALL define a frozen dataclass `BankTransaction` with fields: `booking_date` (date), `value_date` (date), `verification_number` (str), `text` (str), `amount` (Decimal), `balance` (Decimal).
 
 #### Scenario: BankTransaction is immutable
 - **WHEN** code attempts to modify a field on a BankTransaction instance
@@ -9,7 +9,7 @@ The system SHALL define a frozen dataclass `BankTransaction` with fields: `bokfo
 
 #### Scenario: BankTransaction stores monetary values as Decimal
 - **WHEN** a BankTransaction is created with `belopp=Decimal("-125.00")`
-- **THEN** the `belopp` field retains exact Decimal precision without float conversion
+- **THEN** the `amount` field retains exact Decimal precision without float conversion
 
 ### Requirement: CategorizationSuggestion dataclass
 The system SHALL define a frozen dataclass `CategorizationSuggestion` with fields: `transaction` (BankTransaction), `debit_account` (int), `credit_account` (int), `vat_rate` (Decimal), `vat_account` (int | None), `confidence` (str — one of "exact", "pattern", "none"), `rule_id` (int | None).
@@ -19,7 +19,7 @@ The system SHALL define a frozen dataclass `CategorizationSuggestion` with field
 - **THEN** its `transaction` field holds the originating BankTransaction
 
 ### Requirement: JournalEntry and JournalEntrySplit dataclasses
-The system SHALL define frozen dataclasses `JournalEntrySplit` (fields: `account_code` int, `amount` Decimal) and `JournalEntry` (fields: `verifikationsnummer` str, `datum` date, `beskrivning` str, `splits` list[JournalEntrySplit]).
+The system SHALL define frozen dataclasses `JournalEntrySplit` (fields: `account_code` int, `amount` Decimal) and `JournalEntry` (fields: `verification_number` str, `entry_date` date, `description` str, `splits` list[JournalEntrySplit]).
 
 #### Scenario: JournalEntry splits sum to zero
 - **WHEN** a JournalEntry is created with splits whose amounts sum to Decimal("0.00")
@@ -37,10 +37,10 @@ The system SHALL define a dataclass `Rule` with fields: `id` (int | None), `patt
 - **THEN** the modification succeeds (Rule is not frozen)
 
 ### Requirement: CompanyInfo dataclass
-The system SHALL define a frozen dataclass `CompanyInfo` with fields: `name` (str), `org_nummer` (str), `address` (str), `fiscal_year` (int).
+The system SHALL define a frozen dataclass `CompanyInfo` with fields: `name` (str), `org_number` (str), `address` (str), `fiscal_year` (int).
 
 #### Scenario: CompanyInfo is used for report headers
-- **WHEN** a CompanyInfo is created with `name="Test AB"` and `org_nummer="123456-7890"`
+- **WHEN** a CompanyInfo is created with `name="Test AB"` and `org_number="123456-7890"`
 - **THEN** both fields are accessible for rendering into report templates
 
 ### Requirement: ImportResult dataclass
@@ -58,11 +58,11 @@ The system SHALL define a frozen dataclass `VATSplit` with fields: `net_amount` 
 - **THEN** `net_amount` is Decimal("-100.00") and `vat_amount` is Decimal("-25.00")
 
 ### Requirement: Custom exception hierarchy
-The system SHALL define a base exception `BokforingError(Exception)` and derived exceptions: `CSVParseError(BokforingError)`, `GnuCashError(BokforingError)`, `RulesDBError(BokforingError)`.
+The system SHALL define a base exception `BookkeepingError(Exception)` and derived exceptions: `CSVParseError(BookkeepingError)`, `GnuCashError(BookkeepingError)`, `RulesDBError(BookkeepingError)`.
 
-#### Scenario: CSVParseError is catchable as BokforingError
+#### Scenario: CSVParseError is catchable as BookkeepingError
 - **WHEN** code raises CSVParseError("Invalid row at line 5")
-- **THEN** a `except BokforingError` handler catches it
+- **THEN** a `except BookkeepingError` handler catches it
 
 #### Scenario: Exceptions carry descriptive messages
 - **WHEN** CSVParseError is raised with a message describing the parsing failure

@@ -20,7 +20,7 @@ The system SHALL provide a function `filter_duplicates(transactions: list[BankTr
 - **AND** the second list contains the 2 transactions with Verifikationsnummer "1001" and "1002"
 
 ### Requirement: Match by exact string comparison
-The system SHALL identify duplicates by exact string comparison between the BankTransaction's `verifikationsnummer` field and the GnuCash transaction's `num` field.
+The system SHALL identify duplicates by exact string comparison between the BankTransaction's `verification_number` field and the GnuCash transaction's `num` field.
 
 #### Scenario: Exact match required
 - **GIVEN** a GnuCash book containing a transaction with `num` field "1001"

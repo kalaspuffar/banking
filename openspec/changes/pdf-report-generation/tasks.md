@@ -1,6 +1,6 @@
 ## 1. Report Module Setup and GnuCash Data Queries
 
-- [ ] 1.1 Create `bokforing/reports.py` with the `generate_report(report_type, gnucash_book_path, fiscal_year, output_path, company_info) -> Path` entry point function and report type dispatch logic
+- [ ] 1.1 Create `bookkeeping/reports.py` with the `generate_report(report_type, gnucash_book_path, fiscal_year, output_path, company_info) -> Path` entry point function and report type dispatch logic
 - [ ] 1.2 Implement GnuCash data querying via piecash: open book in readonly mode, fetch all transactions/splits within the fiscal year date range (2025-01-01 to 2025-12-31 for fiscal_year=2025)
 - [ ] 1.3 Implement account aggregation by BAS ranges: sum split amounts grouped by account code, with helper functions to aggregate by account prefix (e.g., 30xx) and account range (e.g., 50xx-69xx)
 
@@ -16,16 +16,16 @@
 
 ## 4. Grundbok and Huvudbok Reports
 
-- [ ] 4.1 Implement grundbok data preparation: query all transactions for the fiscal year, flatten to split-level rows (verifikation, datum, text, konto, debet, kredit), sort by date then verifikationsnummer, compute grand totals
+- [ ] 4.1 Implement grundbok data preparation: query all transactions for the fiscal year, flatten to split-level rows (verifikation, datum, text, konto, debet, kredit), sort by date then verification_number, compute grand totals
 - [ ] 4.2 Implement huvudbok data preparation: query all accounts with activity in the fiscal year, for each account compute opening balance, list transactions, compute closing balance and subtotals, sort by account number
 
 ## 5. HTML/CSS Templates
 
-- [ ] 5.1 Create `bokforing/templates/base.html` with A4 CSS `@page` rules (210mm x 297mm, margins), company info header block, "Sida X av Y" page number footer using CSS counters, and `{% block title %}` / `{% block content %}` for inheritance
-- [ ] 5.2 Create `bokforing/templates/momsdeklaration.html` extending base.html, with a ruta table (Ruta, Beskrivning, Belopp) and SKV 4700 reference
-- [ ] 5.3 Create `bokforing/templates/ne_bilaga.html` extending base.html, with resultaträkning section (R1, R2, R5, R6, R7) and balansräkning section (B1, B4), and INK1 reference
-- [ ] 5.4 Create `bokforing/templates/grundbok.html` extending base.html, with transaction table (Verifikation, Datum, Text, Konto, Debet, Kredit) and grand totals row
-- [ ] 5.5 Create `bokforing/templates/huvudbok.html` extending base.html, with per-account sections (header, opening balance, transaction rows, closing balance), page-break CSS between accounts
+- [ ] 5.1 Create `bookkeeping/templates/base.html` with A4 CSS `@page` rules (210mm x 297mm, margins), company info header block, "Sida X av Y" page number footer using CSS counters, and `{% block title %}` / `{% block content %}` for inheritance
+- [ ] 5.2 Create `bookkeeping/templates/momsdeklaration.html` extending base.html, with a ruta table (Ruta, Beskrivning, Belopp) and SKV 4700 reference
+- [ ] 5.3 Create `bookkeeping/templates/ne_bilaga.html` extending base.html, with resultaträkning section (R1, R2, R5, R6, R7) and balansräkning section (B1, B4), and INK1 reference
+- [ ] 5.4 Create `bookkeeping/templates/grundbok.html` extending base.html, with transaction table (Verifikation, Datum, Text, Konto, Debet, Kredit) and grand totals row
+- [ ] 5.5 Create `bookkeeping/templates/huvudbok.html` extending base.html, with per-account sections (header, opening balance, transaction rows, closing balance), page-break CSS between accounts
 
 ## 6. PDF Generation
 

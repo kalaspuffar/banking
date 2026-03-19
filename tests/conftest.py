@@ -1,11 +1,11 @@
-"""Shared pytest fixtures for the bokföring test suite."""
+"""Shared pytest fixtures for the bookkeeping test suite."""
 
 from datetime import date
 from decimal import Decimal
 
 import pytest
 
-from bokforing.models import (
+from bookkeeping.models import (
     BankTransaction,
     JournalEntry,
     JournalEntrySplit,
@@ -17,12 +17,12 @@ from bokforing.models import (
 def sample_bank_transaction() -> BankTransaction:
     """A typical expense transaction (Spotify subscription with 25% VAT)."""
     return BankTransaction(
-        bokforingsdatum=date(2026, 1, 28),
-        valutadatum=date(2026, 1, 28),
-        verifikationsnummer="12345",
+        booking_date=date(2026, 1, 28),
+        value_date=date(2026, 1, 28),
+        verification_number="12345",
         text="Spotify",
-        belopp=Decimal("-125.00"),
-        saldo=Decimal("10000.00"),
+        amount=Decimal("-125.00"),
+        balance=Decimal("10000.00"),
     )
 
 
@@ -30,12 +30,30 @@ def sample_bank_transaction() -> BankTransaction:
 def sample_income_transaction() -> BankTransaction:
     """A typical income transaction (consulting payment)."""
     return BankTransaction(
-        bokforingsdatum=date(2026, 1, 15),
-        valutadatum=date(2026, 1, 15),
-        verifikationsnummer="12340",
+        booking_date=date(2026, 1, 15),
+        value_date=date(2026, 1, 15),
+        verification_number="12340",
         text="Kund AB betalning",
-        belopp=Decimal("10000.00"),
-        saldo=Decimal("20000.00"),
+        amount=Decimal("10000.00"),
+        balance=Decimal("20000.00"),
+    )
+
+
+@pytest.fixture
+def sample_bank_transaction_3_decimal() -> BankTransaction:
+    """A transaction with 3-decimal amount matching real bank CSV format.
+
+    The bank CSV exports amounts like -100.000 which, after parsing to
+    Decimal, preserves trailing precision. This fixture validates that
+    the model handles such values correctly.
+    """
+    return BankTransaction(
+        booking_date=date(2026, 2, 1),
+        value_date=date(2026, 2, 1),
+        verification_number="12350",
+        text="Bankavgift",
+        amount=Decimal("-100.000"),
+        balance=Decimal("9900.000"),
     )
 
 
@@ -63,9 +81,9 @@ def sample_journal_entry() -> JournalEntry:
     bank -125 (credit 1930).
     """
     return JournalEntry(
-        verifikationsnummer="12345",
-        datum=date(2026, 1, 28),
-        beskrivning="Spotify",
+        verification_number="12345",
+        entry_date=date(2026, 1, 28),
+        description="Spotify",
         splits=[
             JournalEntrySplit(account_code=6540, amount=Decimal("100.00")),
             JournalEntrySplit(account_code=2640, amount=Decimal("25.00")),

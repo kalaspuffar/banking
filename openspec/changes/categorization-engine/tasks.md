@@ -1,6 +1,6 @@
 ## 1. Create Categorizer Module
 
-- [ ] 1.1 Create `bokforing/categorizer.py` with imports for BankTransaction, CategorizationSuggestion, Rule from models, RulesDatabase from rules_db, and apply_vat_split from vat
+- [ ] 1.1 Create `bookkeeping/categorizer.py` with imports for BankTransaction, CategorizationSuggestion, Rule from models, RulesDatabase from rules_db, and apply_vat_split from vat
 
 ## 2. Implement Text Normalization
 
