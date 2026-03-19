@@ -1,14 +1,14 @@
 ## ADDED Requirements
 
 ### Requirement: Display transactions in a table
-The system SHALL display imported transactions in a `Gtk.ColumnView` with columns: Datum (bokforingsdatum), Text (transaction description), Belopp (amount in SEK), Konto (BAS account number), and Moms (VAT rate).
+The system SHALL display imported transactions in a `Gtk.ColumnView` with columns: Datum (booking_date), Text (transaction description), Belopp (amount in SEK), Konto (BAS account number), and Moms (VAT rate).
 
 #### Scenario: All transactions visible after import
 - **WHEN** the GTK4 application is launched with a list of 10 CategorizationSuggestion objects
 - **THEN** the table displays 10 rows, each showing the transaction's datum, text, belopp, suggested konto, and moms rate
 
 #### Scenario: Amounts formatted correctly
-- **WHEN** a transaction has belopp = Decimal("-125.00")
+- **WHEN** a transaction has amount = Decimal("-125.00")
 - **THEN** the Belopp column displays "-125,00" (Swedish decimal comma notation)
 
 ### Requirement: Show suggested accounts with visual indicators

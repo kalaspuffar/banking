@@ -49,7 +49,7 @@ The system SHALL provide a function `save_rule(rules_db: RulesDatabase, pattern:
 - **THEN** the rule is saved to the RulesDatabase and can be found by subsequent `suggest_categorization` calls
 
 ### Requirement: Include VAT split info in suggestions
-The system SHALL include VAT split information in CategorizationSuggestion by calling `apply_vat_split` from `bokforing/vat.py` with the transaction amount and the matched rule's VAT rate.
+The system SHALL include VAT split information in CategorizationSuggestion by calling `apply_vat_split` from `bookkeeping/vat.py` with the transaction amount and the matched rule's VAT rate.
 
 #### Scenario: Suggestion includes VAT split for 25% rate
 - **WHEN** a transaction with `belopp = Decimal("-125.00")` matches a rule with `vat_rate = Decimal("0.25")`

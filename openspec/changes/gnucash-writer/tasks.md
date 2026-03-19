@@ -1,7 +1,7 @@
 ## 1. Backup Function
 
-- [ ] 1.1 Implement `_backup_book(gnucash_book_path: Path) -> Path` in `bokforing/gnucash_writer.py` that copies the book file to `{path}.backup.{YYYYMMDD-HHMMSS}` using `shutil.copy2` and returns the backup path
-- [ ] 1.2 Add `GnuCashError` exception class to `bokforing/gnucash_writer.py` (or `bokforing/models.py` alongside other exceptions)
+- [ ] 1.1 Implement `_backup_book(gnucash_book_path: Path) -> Path` in `bookkeeping/gnucash_writer.py` that copies the book file to `{path}.backup.{YYYYMMDD-HHMMSS}` using `shutil.copy2` and returns the backup path
+- [ ] 1.2 Add `GnuCashError` exception class to `bookkeeping/gnucash_writer.py` (or `bookkeeping/models.py` alongside other exceptions)
 
 ## 2. Account Lookup
 

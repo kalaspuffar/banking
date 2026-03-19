@@ -17,7 +17,7 @@ The application receives a list of `CategorizationSuggestion` objects (some with
 
 **Non-Goals:**
 - Multi-window interface (everything in one window)
-- Preferences dialog or settings UI (configuration is via CLI `bokforing config`)
+- Preferences dialog or settings UI (configuration is via CLI `bookkeeping config`)
 - Drag-and-drop reordering of transactions
 - Direct CSV file opening from the GUI (CSV is passed in from the CLI pipeline)
 - Undo/redo within the GUI session

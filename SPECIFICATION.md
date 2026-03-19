@@ -56,7 +56,7 @@ Build a set of Python helper tools around the user's existing GnuCash installati
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│                        bokforing/                            │
+│                        bookkeeping/                           │
 │                                                              │
 │  ┌─────────────┐   ┌──────────────┐   ┌─────────────────┐  │
 │  │  csv_parser  │──►│ categorizer   │──►│ gnucash_writer  │  │
@@ -91,7 +91,7 @@ Build a set of Python helper tools around the user's existing GnuCash installati
 
 ## 3. System Components
 
-### 3.1 CSV Parser (`bokforing.csv_parser`)
+### 3.1 CSV Parser (`bookkeeping.csv_parser`)
 
 **Purpose**: Parse the bank's semicolon-delimited CSV export into structured transaction objects.
 
@@ -111,7 +111,7 @@ def parse_bank_csv(filepath: Path) -> list[BankTransaction]:
         CSVParseError: If the file format is invalid or fields are missing.
 
     Returns:
-        List of BankTransaction objects, ordered by Bokföringsdatum.
+        List of BankTransaction objects, ordered by booking_date.
     """
 ```
 
@@ -125,7 +125,7 @@ def parse_bank_csv(filepath: Path) -> list[BankTransaction]:
 
 ---
 
-### 3.2 Duplicate Detector (`bokforing.dedup`)
+### 3.2 Duplicate Detector (`bookkeeping.dedup`)
 
 **Purpose**: Prevent the same transaction from being imported twice by checking Verifikationsnummer against existing GnuCash entries.
 
@@ -150,7 +150,7 @@ def filter_duplicates(
 
 **Implementation Notes**:
 - Use piecash to open the GnuCash book in readonly mode
-- The bank's Verifikationsnummer is stored in the GnuCash transaction's `num` field
+- The bank's verification number is stored in the GnuCash transaction's `num` field
 - Match is exact string comparison on `num`
 - This check runs before any categorization to avoid wasted effort
 
@@ -158,7 +158,7 @@ def filter_duplicates(
 
 ---
 
-### 3.3 Categorization Engine (`bokforing.categorizer`)
+### 3.3 Categorization Engine (`bookkeeping.categorizer`)
 
 **Purpose**: Suggest BAS 2023 account mappings for transactions based on stored rules, and handle VAT splitting.
 
@@ -236,7 +236,7 @@ For a transaction with VAT, the double-entry splits are:
 
 ---
 
-### 3.4 Rules Database (`bokforing.rules_db`)
+### 3.4 Rules Database (`bookkeeping.rules_db`)
 
 **Purpose**: Persist categorization rules in a dedicated SQLite database, separate from GnuCash.
 
@@ -263,7 +263,7 @@ class RulesDatabase:
 
 ---
 
-### 3.5 GnuCash Writer (`bokforing.gnucash_writer`)
+### 3.5 GnuCash Writer (`bookkeeping.gnucash_writer`)
 
 **Purpose**: Write confirmed, categorized transactions into the GnuCash book via piecash.
 
@@ -271,7 +271,7 @@ class RulesDatabase:
 - Open GnuCash SQLite book file
 - Look up BAS accounts by account code
 - Create balanced transactions with correct splits
-- Store Verifikationsnummer in the transaction `num` field for deduplication
+- Store verification_number in the transaction `num` field for deduplication
 - Commit atomically — all transactions in a batch succeed or none do
 
 **Interface**:
@@ -295,9 +295,9 @@ def write_transactions(
 - Look up accounts using `book.accounts` filtered by `code` field (the BAS account number)
 - Amounts stored as rational numbers: `value_num` = amount in öre, `value_denom` = 100
 - The `currency` for all transactions is SEK (from `book.default_currency` or looked up in commodities)
-- Transaction `post_date` = Bokföringsdatum from CSV
-- Transaction `description` = Text from CSV
-- Transaction `num` = Verifikationsnummer from CSV
+- Transaction `post_date` = booking_date from CSV
+- Transaction `description` = text from CSV
+- Transaction `num` = verification_number from CSV
 - **Always back up the .gnucash file before writing** (the tool should create a timestamped copy)
 - GnuCash must NOT be open simultaneously (SQLite locking)
 
@@ -305,7 +305,7 @@ def write_transactions(
 
 ---
 
-### 3.6 GTK4 Verification Application (`bokforing.gtk_app`)
+### 3.6 GTK4 Verification Application (`bookkeeping.gtk_app`)
 
 **Purpose**: Provide a graphical interface for the user to review, confirm, and correct categorization suggestions before committing to GnuCash.
 
@@ -316,7 +316,7 @@ def write_transactions(
 - Provide searchable account selection (dropdown/combobox with account number + description)
 - Show import summary (new, duplicates skipped, errors)
 - Trigger the write to GnuCash on user confirmation
-- Show running balance for reconciliation against bank Saldo
+- Show running balance for reconciliation against bank balance
 
 **Window Layout**:
 ```
@@ -358,7 +358,7 @@ def write_transactions(
 
 ---
 
-### 3.7 Report Generator (`bokforing.reports`)
+### 3.7 Report Generator (`bookkeeping.reports`)
 
 **Purpose**: Read transaction data from the GnuCash book and generate PDF reports for tax filing and legal archiving.
 
@@ -433,7 +433,7 @@ For each account with activity:
 Sorted by account number. Includes account subtotals.
 
 **PDF Template Structure**:
-Each report is an HTML/CSS template in `bokforing/templates/`:
+Each report is an HTML/CSS template in `bookkeeping/templates/`:
 - `momsdeklaration.html` — VAT summary
 - `ne_bilaga.html` — NE attachment summary
 - `grundbok.html` — Journal
@@ -466,42 +466,42 @@ def generate_report(
 
 #### BankTransaction (parsed from CSV)
 ```python
-@dataclass
+@dataclass(frozen=True)
 class BankTransaction:
-    bokforingsdatum: date       # Booking date
-    valutadatum: date           # Value date
-    verifikationsnummer: str    # Unique transaction ID from bank
-    text: str                   # Transaction description
-    belopp: Decimal             # Amount in SEK (negative=expense, positive=income)
-    saldo: Decimal              # Running balance after transaction
+    booking_date: date          # Booking date (CSV: Bokföringsdatum)
+    value_date: date            # Value date (CSV: Valutadatum)
+    verification_number: str    # Unique transaction ID from bank (CSV: Verifikationsnummer)
+    text: str                   # Transaction description (CSV: Text)
+    amount: Decimal             # Amount in SEK, negative=expense, positive=income (CSV: Belopp)
+    balance: Decimal            # Running balance after transaction (CSV: Saldo)
 ```
 
-#### CategorSuggestion (from categorization engine)
+#### CategorizationSuggestion (from categorization engine)
 ```python
-@dataclass
+@dataclass(frozen=True)
 class CategorizationSuggestion:
     transaction: BankTransaction
     debit_account: int          # BAS account number (e.g., 1930)
     credit_account: int         # BAS account number (e.g., 3010)
     vat_rate: Decimal           # 0.00, 0.06, 0.12, or 0.25
     vat_account: int | None     # BAS VAT account (e.g., 2610) or None if 0%
-    confidence: str             # "exact", "pattern", or "none"
+    confidence: Confidence      # "exact", "pattern", or "none"
     rule_id: int | None         # ID of the matching rule, if any
 ```
 
 #### JournalEntry (ready to write to GnuCash)
 ```python
-@dataclass
+@dataclass(frozen=True)
 class JournalEntrySplit:
     account_code: int           # BAS account number
     amount: Decimal             # Positive = debit, negative = credit
 
-@dataclass
+@dataclass(frozen=True)
 class JournalEntry:
-    verifikationsnummer: str
-    datum: date
-    beskrivning: str
-    splits: list[JournalEntrySplit]  # Must sum to zero
+    verification_number: str
+    entry_date: date
+    description: str
+    splits: tuple[JournalEntrySplit, ...]  # Must sum to zero (enforced at construction)
 ```
 
 #### Rule (categorization rule)
@@ -510,7 +510,7 @@ class JournalEntry:
 class Rule:
     id: int | None
     pattern: str                # Text pattern to match
-    match_type: str             # "exact" or "contains"
+    match_type: MatchType       # "exact" or "contains" (validated at construction)
     debit_account: int          # BAS account number
     credit_account: int         # BAS account number
     vat_rate: Decimal
@@ -521,17 +521,17 @@ class Rule:
 
 #### CompanyInfo (for report headers)
 ```python
-@dataclass
+@dataclass(frozen=True)
 class CompanyInfo:
     name: str                   # Company/proprietor name
-    org_nummer: str             # Organisationsnummer
+    org_number: str             # Organisationsnummer
     address: str
     fiscal_year: int
 ```
 
 ### 4.2 Database Schema — Rules Database
 
-File: `~/.local/share/bokforing/rules.db`
+File: `~/.local/share/bookkeeping/rules.db`
 
 ```sql
 CREATE TABLE rules (
@@ -556,7 +556,7 @@ CREATE TABLE config (
     key     TEXT PRIMARY KEY,
     value   TEXT NOT NULL
 );
--- Stores: gnucash_book_path, company_name, org_nummer, etc.
+-- Stores: gnucash_book_path, company_name, org_number, etc.
 
 CREATE TABLE import_log (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -573,11 +573,11 @@ CREATE TABLE import_log (
 
 The tool reads/writes to the user's existing GnuCash SQLite book. Key mappings:
 
-| Our Concept | GnuCash Table | GnuCash Field |
+| Our Field | GnuCash Table | GnuCash Field |
 |---|---|---|
-| Verifikationsnummer | transactions | num |
-| Bokföringsdatum | transactions | post_date |
-| Transaction text | transactions | description |
+| verification_number | transactions | num |
+| booking_date | transactions | post_date |
+| text (description) | transactions | description |
 | BAS account code | accounts | code |
 | Split amount | splits | value_num / value_denom |
 | Currency (SEK) | commodities | mnemonic = 'SEK' |
@@ -596,9 +596,9 @@ The tool reads/writes to the user's existing GnuCash SQLite book. Key mappings:
 
 ## 5. API Specifications (CLI Interface)
 
-The tool is invoked via a single CLI entry point: `bokforing`
+The tool is invoked via a single CLI entry point: `bookkeeping`
 
-### 5.1 `bokforing import <csv_file>`
+### 5.1 `bookkeeping import <csv_file>`
 
 **Description**: Parse a bank CSV, detect duplicates, launch the GTK4 categorization GUI, and write confirmed transactions to GnuCash.
 
@@ -620,7 +620,7 @@ The tool is invoked via a single CLI entry point: `bokforing`
 
 **Exit codes**: 0 = success, 1 = parse error, 2 = GnuCash error, 3 = user cancelled
 
-### 5.2 `bokforing report <type> <year>`
+### 5.2 `bookkeeping report <type> <year>`
 
 **Description**: Generate a PDF report from GnuCash data.
 
@@ -634,7 +634,7 @@ The tool is invoked via a single CLI entry point: `bokforing`
 
 **Output**: PDF file(s) named `{type}_{year}.pdf` (e.g., `momsdeklaration_2025.pdf`)
 
-### 5.3 `bokforing rules`
+### 5.3 `bookkeeping rules`
 
 **Description**: Manage categorization rules.
 
@@ -646,7 +646,7 @@ The tool is invoked via a single CLI entry point: `bokforing`
 | `rules export <file>` | Export rules to JSON |
 | `rules import <file>` | Import rules from JSON |
 
-### 5.4 `bokforing config`
+### 5.4 `bookkeeping config`
 
 **Description**: View and set configuration.
 
@@ -656,9 +656,9 @@ The tool is invoked via a single CLI entry point: `bokforing`
 | `config show` | Display current configuration |
 | `config set <key> <value>` | Set a config value |
 
-**Config keys**: `gnucash_book_path`, `company_name`, `org_nummer`, `company_address`
+**Config keys**: `gnucash_book_path`, `company_name`, `org_number`, `company_address`
 
-### 5.5 `bokforing init`
+### 5.5 `bookkeeping init`
 
 **Description**: First-time setup wizard. Creates the rules database, prompts for GnuCash book path and company info.
 
@@ -667,13 +667,13 @@ The tool is invoked via a single CLI entry point: `bokforing`
 ## 6. Security Architecture
 
 ### Data Protection
-- All data stored locally in `~/.local/share/bokforing/` (rules DB, config) and the user's GnuCash file
+- All data stored locally in `~/.local/share/bookkeeping/` (rules DB, config) and the user's GnuCash file
 - No network communication whatsoever (NF-SEC-01, NF-SEC-02)
 - File permissions: rules.db created with `0600` (owner read/write only) (NF-SEC-03)
 
 ### Backup Strategy
 - Before every write to GnuCash: create `{book}.backup.{timestamp}` copy
-- Rules DB backup: `bokforing rules export` produces portable JSON
+- Rules DB backup: `bookkeeping rules export` produces portable JSON
 - PDF reports are self-contained archival documents
 
 ### Input Validation
@@ -720,15 +720,15 @@ sudo apt install gnucash python3-gi gir1.2-gtk-4.0
 pip install --user -e .
 
 # First-time setup
-bokforing init
+bookkeeping init
 ```
 
 ### Project Structure
 ```
-bokforing/
+bookkeeping/
 ├── pyproject.toml              # Package metadata and dependencies
 ├── README.md                   # User documentation
-├── bokforing/
+├── bookkeeping/
 │   ├── __init__.py
 │   ├── __main__.py             # CLI entry point
 │   ├── cli.py                  # argparse CLI definitions
@@ -856,10 +856,10 @@ bokforing/
 ### Phase 4: CLI, Config, and Polish
 **Components**: cli, config, init wizard, error handling
 **Acceptance Criteria**:
-- [ ] `bokforing init` sets up the environment
-- [ ] `bokforing import` runs the full pipeline
-- [ ] `bokforing report` generates all report types
-- [ ] `bokforing rules` manages categorization rules
+- [ ] `bookkeeping init` sets up the environment
+- [ ] `bookkeeping import` runs the full pipeline
+- [ ] `bookkeeping report` generates all report types
+- [ ] `bookkeeping rules` manages categorization rules
 - [ ] Clear error messages for all failure modes
 - [ ] Import log tracking
 

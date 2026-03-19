@@ -1,82 +1,82 @@
 ## ADDED Requirements
 
 ### Requirement: Import subcommand
-The system SHALL provide a `bokforing import <csv_file>` subcommand that orchestrates the full import pipeline: parse CSV, filter duplicates, categorize transactions, launch the GTK4 verification GUI, and write confirmed transactions to GnuCash.
+The system SHALL provide a `bookkeeping import <csv_file>` subcommand that orchestrates the full import pipeline: parse CSV, filter duplicates, categorize transactions, launch the GTK4 verification GUI, and write confirmed transactions to GnuCash.
 
 #### Scenario: Successful import with GUI
-- **WHEN** `bokforing import transactions.csv` is run with a valid CSV and configured GnuCash book
+- **WHEN** `bookkeeping import transactions.csv` is run with a valid CSV and configured GnuCash book
 - **THEN** the system parses the CSV, filters duplicates, applies categorization rules, launches the GTK4 GUI for verification, writes confirmed transactions to GnuCash, logs the import, and exits with code 0
 
 #### Scenario: Import with --dry-run
-- **WHEN** `bokforing import transactions.csv --dry-run` is run
+- **WHEN** `bookkeeping import transactions.csv --dry-run` is run
 - **THEN** the system parses, deduplicates, and categorizes but does not write to GnuCash or launch the GUI, and prints a summary of what would be imported
 
 #### Scenario: Import with --no-gui
-- **WHEN** `bokforing import transactions.csv --no-gui` is run
+- **WHEN** `bookkeeping import transactions.csv --no-gui` is run
 - **THEN** the system uses CLI-only mode showing suggestions and requiring text-based confirmation instead of the GTK4 GUI
 
 #### Scenario: Import with --book override
-- **WHEN** `bokforing import transactions.csv --book /path/to/other.gnucash` is run
+- **WHEN** `bookkeeping import transactions.csv --book /path/to/other.gnucash` is run
 - **THEN** the specified GnuCash book is used instead of the configured default
 
 ### Requirement: Report subcommand
-The system SHALL provide a `bokforing report <type> <year>` subcommand that generates PDF reports from GnuCash data.
+The system SHALL provide a `bookkeeping report <type> <year>` subcommand that generates PDF reports from GnuCash data.
 
 #### Scenario: Generate momsdeklaration report
-- **WHEN** `bokforing report moms 2025` is run
+- **WHEN** `bookkeeping report moms 2025` is run
 - **THEN** a PDF file `momsdeklaration_2025.pdf` is generated in the output directory
 
 #### Scenario: Generate all reports
-- **WHEN** `bokforing report all 2025` is run
+- **WHEN** `bookkeeping report all 2025` is run
 - **THEN** PDF files for momsdeklaration, NE-bilaga, grundbok, and huvudbok are all generated for fiscal year 2025
 
 #### Scenario: Custom output directory
-- **WHEN** `bokforing report moms 2025 --output-dir /tmp/reports` is run
+- **WHEN** `bookkeeping report moms 2025 --output-dir /tmp/reports` is run
 - **THEN** the PDF is written to `/tmp/reports/momsdeklaration_2025.pdf`
 
 #### Scenario: Default output directory
-- **WHEN** `bokforing report moms 2025` is run without `--output-dir`
+- **WHEN** `bookkeeping report moms 2025` is run without `--output-dir`
 - **THEN** the PDF is written to `./rapporter/momsdeklaration_2025.pdf`
 
 ### Requirement: Rules management subcommands
-The system SHALL provide `bokforing rules` subcommands for managing categorization rules.
+The system SHALL provide `bookkeeping rules` subcommands for managing categorization rules.
 
 #### Scenario: List all rules
-- **WHEN** `bokforing rules list` is run
+- **WHEN** `bookkeeping rules list` is run
 - **THEN** all stored categorization rules are displayed in a tabular format showing id, pattern, match_type, debit_account, credit_account, vat_rate, and use_count
 
 #### Scenario: Delete a rule
-- **WHEN** `bokforing rules delete 5` is run
+- **WHEN** `bookkeeping rules delete 5` is run
 - **THEN** the rule with id 5 is removed from the rules database
 
 #### Scenario: Export rules to JSON
-- **WHEN** `bokforing rules export backup.json` is run
+- **WHEN** `bookkeeping rules export backup.json` is run
 - **THEN** all rules are exported to `backup.json` in JSON format
 
 #### Scenario: Import rules from JSON
-- **WHEN** `bokforing rules import backup.json` is run
+- **WHEN** `bookkeeping rules import backup.json` is run
 - **THEN** rules from `backup.json` are imported into the rules database
 
 ### Requirement: Config subcommands
-The system SHALL provide `bokforing config` subcommands for viewing and setting configuration.
+The system SHALL provide `bookkeeping config` subcommands for viewing and setting configuration.
 
 #### Scenario: Show current configuration
-- **WHEN** `bokforing config show` is run
+- **WHEN** `bookkeeping config show` is run
 - **THEN** all current configuration key-value pairs are displayed
 
 #### Scenario: Set a config value
-- **WHEN** `bokforing config set gnucash_book_path /home/user/books/main.gnucash` is run
+- **WHEN** `bookkeeping config set gnucash_book_path /home/user/books/main.gnucash` is run
 - **THEN** the gnucash_book_path config key is updated in the rules.db config table
 
 ### Requirement: Init wizard
-The system SHALL provide a `bokforing init` subcommand that performs first-time setup.
+The system SHALL provide a `bookkeeping init` subcommand that performs first-time setup.
 
 #### Scenario: First-time init
-- **WHEN** `bokforing init` is run for the first time
-- **THEN** it creates the rules database at `~/.local/share/bokforing/rules.db`, prompts for GnuCash book path, company name, organisationsnummer, and company address, validates the GnuCash book path exists, and saves all values to the config table
+- **WHEN** `bookkeeping init` is run for the first time
+- **THEN** it creates the rules database at `~/.local/share/bookkeeping/rules.db`, prompts for GnuCash book path, company name, organisationsnummer, and company address, validates the GnuCash book path exists, and saves all values to the config table
 
 #### Scenario: Re-running init
-- **WHEN** `bokforing init` is run when a rules database already exists
+- **WHEN** `bookkeeping init` is run when a rules database already exists
 - **THEN** it shows current values as defaults and allows the user to update them
 
 ### Requirement: Exit codes

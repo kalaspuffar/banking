@@ -4,7 +4,7 @@ Importing overlapping date ranges from the bank's CSV export must not create dup
 
 ## What Changes
 
-- Implement `bokforing/dedup.py` with `filter_duplicates(transactions: list[BankTransaction], gnucash_book_path: Path) -> tuple[list[BankTransaction], list[BankTransaction]]`
+- Implement `bookkeeping/dedup.py` with `filter_duplicates(transactions: list[BankTransaction], gnucash_book_path: Path) -> tuple[list[BankTransaction], list[BankTransaction]]`
 - Use piecash to open the GnuCash book in readonly mode and query existing transaction `num` fields
 - Partition incoming transactions into (new, duplicates) by exact string comparison of Verifikationsnummer against existing `num` values
 - Create comprehensive unit tests in `tests/test_dedup.py` with programmatically created GnuCash test books via piecash
@@ -18,6 +18,6 @@ Importing overlapping date ranges from the bank's CSV export must not create dup
 
 ## Impact
 
-- **Code**: New module `bokforing/dedup.py` and test file `tests/test_dedup.py`
-- **Dependencies**: Requires `piecash` for GnuCash book access and `bokforing.models` for BankTransaction
+- **Code**: New module `bookkeeping/dedup.py` and test file `tests/test_dedup.py`
+- **Dependencies**: Requires `piecash` for GnuCash book access and `bookkeeping.models` for BankTransaction
 - **Data**: Reads GnuCash book (readonly); consumes list of BankTransaction, produces partitioned tuple of (new, duplicate) transactions

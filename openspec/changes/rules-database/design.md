@@ -1,6 +1,6 @@
 ## Context
 
-The categorization engine (`bokforing.categorizer`) needs a persistent store for pattern-matching rules that map transaction text to BAS 2023 accounts. This database is deliberately separate from the GnuCash book so that rules survive GnuCash upgrades, can be backed up independently via JSON export, and do not interfere with the accounting data. The SPECIFICATION.md section 3.4 defines the interface and section 4.2 defines the schema.
+The categorization engine (`bookkeeping.categorizer`) needs a persistent store for pattern-matching rules that map transaction text to BAS 2023 accounts. This database is deliberately separate from the GnuCash book so that rules survive GnuCash upgrades, can be backed up independently via JSON export, and do not interfere with the accounting data. The SPECIFICATION.md section 3.4 defines the interface and section 4.2 defines the schema.
 
 ## Goals / Non-Goals
 
@@ -23,7 +23,7 @@ The categorization engine (`bokforing.categorizer`) needs a persistent store for
 **Rationale**: Zero external dependencies. SQLite is perfectly suited for a single-user desktop application with ~50-100 rules. The stdlib `sqlite3` module provides everything needed.
 **Alternative considered**: SQLAlchemy/ORM — unnecessary complexity for a three-table schema with simple queries.
 
-### 2. Database file at `~/.local/share/bokforing/rules.db`
+### 2. Database file at `~/.local/share/bookkeeping/rules.db`
 **Rationale**: Follows the XDG Base Directory Specification for application data on Linux. The parent directory is created automatically if it does not exist.
 **Alternative considered**: Storing alongside the GnuCash book — rejected to maintain decoupling.
 
@@ -42,5 +42,5 @@ The categorization engine (`bokforing.categorizer`) needs a persistent store for
 ## Risks / Trade-offs
 
 - **[Risk] Database file deleted or corrupted** -> Mitigation: JSON export provides a portable backup mechanism; import can restore from backup
-- **[Risk] Parent directory does not exist** -> Mitigation: `__init__` creates `~/.local/share/bokforing/` with `os.makedirs(exist_ok=True)` before opening the database
+- **[Risk] Parent directory does not exist** -> Mitigation: `__init__` creates `~/.local/share/bookkeeping/` with `os.makedirs(exist_ok=True)` before opening the database
 - **[Trade-off] No schema migration system** -> Accepted: the schema is simple and unlikely to change frequently. If needed, version can be tracked in the `config` table and migrations applied in `__init__`

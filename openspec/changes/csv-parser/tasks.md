@@ -4,11 +4,11 @@
 
 ## 2. CSV Parser Implementation
 
-- [ ] 2.1 Create `bokforing/csv_parser.py` with the expected CSV column names as constants
+- [ ] 2.1 Create `bookkeeping/csv_parser.py` with the expected CSV column names as constants
 - [ ] 2.2 Implement header validation that raises CSVParseError on mismatch
 - [ ] 2.3 Implement date parsing (YYYY-MM-DD → date) with CSVParseError on failure
 - [ ] 2.4 Implement amount parsing (3-decimal string → Decimal quantized to 2 places) with CSVParseError on failure
-- [ ] 2.5 Implement `parse_bank_csv(filepath: Path) -> list[BankTransaction]` tying it all together, returning transactions sorted by bokforingsdatum
+- [ ] 2.5 Implement `parse_bank_csv(filepath: Path) -> list[BankTransaction]` tying it all together, returning transactions sorted by booking_date
 
 ## 3. Tests
 

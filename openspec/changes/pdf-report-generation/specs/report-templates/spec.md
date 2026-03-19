@@ -1,7 +1,7 @@
 ## ADDED Requirements
 
 ### Requirement: Base template with shared A4 layout
-The system SHALL provide a `bokforing/templates/base.html` Jinja2 template that defines the shared A4 page layout, including CSS `@page` rules, company info header, page numbering footer, and content blocks for report-specific templates to extend.
+The system SHALL provide a `bookkeeping/templates/base.html` Jinja2 template that defines the shared A4 page layout, including CSS `@page` rules, company info header, page numbering footer, and content blocks for report-specific templates to extend.
 
 #### Scenario: A4 page size
 - **WHEN** the base template is rendered to PDF
@@ -20,7 +20,7 @@ The system SHALL provide a `bokforing/templates/base.html` Jinja2 template that 
 - **THEN** it can override the `{% block content %}` and `{% block title %}` blocks
 
 ### Requirement: Momsdeklaration template
-The system SHALL provide a `bokforing/templates/momsdeklaration.html` Jinja2 template that extends base.html and displays the momsdeklaration summary as a table of ruta numbers, descriptions, and amounts.
+The system SHALL provide a `bookkeeping/templates/momsdeklaration.html` Jinja2 template that extends base.html and displays the momsdeklaration summary as a table of ruta numbers, descriptions, and amounts.
 
 #### Scenario: Ruta table layout
 - **WHEN** the momsdeklaration template is rendered with ruta data
@@ -31,7 +31,7 @@ The system SHALL provide a `bokforing/templates/momsdeklaration.html` Jinja2 tem
 - **THEN** it includes a reference to "SKV 4700" and the fiscal year period
 
 ### Requirement: NE-bilaga template
-The system SHALL provide a `bokforing/templates/ne_bilaga.html` Jinja2 template that extends base.html and displays the NE-bilaga summary with resultaträkning and balansräkning sections.
+The system SHALL provide a `bookkeeping/templates/ne_bilaga.html` Jinja2 template that extends base.html and displays the NE-bilaga summary with resultaträkning and balansräkning sections.
 
 #### Scenario: Resultaträkning section
 - **WHEN** the NE-bilaga template is rendered
@@ -46,7 +46,7 @@ The system SHALL provide a `bokforing/templates/ne_bilaga.html` Jinja2 template 
 - **THEN** it includes a reference to "INK1 NE-bilaga" and the fiscal year
 
 ### Requirement: Grundbok template
-The system SHALL provide a `bokforing/templates/grundbok.html` Jinja2 template that extends base.html and displays the chronological journal as a table with page breaks and totals.
+The system SHALL provide a `bookkeeping/templates/grundbok.html` Jinja2 template that extends base.html and displays the chronological journal as a table with page breaks and totals.
 
 #### Scenario: Transaction table columns
 - **WHEN** the grundbok template is rendered with transaction data
@@ -61,7 +61,7 @@ The system SHALL provide a `bokforing/templates/grundbok.html` Jinja2 template t
 - **THEN** it displays grand totals for Debet and Kredit at the end
 
 ### Requirement: Huvudbok template
-The system SHALL provide a `bokforing/templates/huvudbok.html` Jinja2 template that extends base.html and displays the general ledger grouped by account.
+The system SHALL provide a `bookkeeping/templates/huvudbok.html` Jinja2 template that extends base.html and displays the general ledger grouped by account.
 
 #### Scenario: Account section headers
 - **WHEN** the huvudbok template renders an account section

@@ -15,15 +15,15 @@ The system SHALL provide a function `write_transactions(gnucash_book_path: Path,
 - **WHEN** `write_transactions` is called with a JournalEntry containing 3 splits (bank, expense, VAT) that sum to zero
 - **THEN** a GnuCash transaction with 3 splits is created, each split assigned to the correct account
 
-### Requirement: Store Verifikationsnummer in num field
-The system SHALL store the JournalEntry's `verifikationsnummer` in the GnuCash transaction's `num` field, the `datum` in `post_date`, and the `beskrivning` in `description`.
+### Requirement: Store verification_number in num field
+The system SHALL store the JournalEntry's `verification_number` in the GnuCash transaction's `num` field, the `entry_date` in `post_date`, and the `description` in `description`.
 
 #### Scenario: Verifikationsnummer persisted
-- **WHEN** a JournalEntry with verifikationsnummer "12345678" is written
+- **WHEN** a JournalEntry with verification_number "12345678" is written
 - **THEN** the resulting GnuCash transaction has `num = "12345678"`
 
 #### Scenario: Transaction description and date persisted
-- **WHEN** a JournalEntry with datum 2026-01-28 and beskrivning "Spotify" is written
+- **WHEN** a JournalEntry with datum 2026-01-28 and description "Spotify" is written
 - **THEN** the GnuCash transaction has `post_date = date(2026, 1, 28)` and `description = "Spotify"`
 
 ### Requirement: Automatic backup before writing

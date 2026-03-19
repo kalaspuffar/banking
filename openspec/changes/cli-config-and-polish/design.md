@@ -1,13 +1,13 @@
 ## Context
 
-This is Phase 4 (CLI, Config, and Polish) — the final integration phase. All core modules already exist: csv_parser, dedup, categorizer, rules_db, gnucash_writer, gtk_app, and reports. The CLI stub in `bokforing/cli.py` and the `__main__.py` entry point were created during project scaffolding but contain only placeholder logic. The rules.db schema already defines `config` and `import_log` tables (see SPECIFICATION.md section 4.2).
+This is Phase 4 (CLI, Config, and Polish) — the final integration phase. All core modules already exist: csv_parser, dedup, categorizer, rules_db, gnucash_writer, gtk_app, and reports. The CLI stub in `bookkeeping/cli.py` and the `__main__.py` entry point were created during project scaffolding but contain only placeholder logic. The rules.db schema already defines `config` and `import_log` tables (see SPECIFICATION.md section 4.2).
 
 ## Goals / Non-Goals
 
 **Goals:**
 - Complete CLI UX with clear subcommands matching SPECIFICATION.md sections 5.1–5.5
-- Configuration persistence in the rules.db `config` table (gnucash_book_path, company_name, org_nummer, company_address)
-- First-time setup wizard (`bokforing init`) that creates the rules database and prompts for all config values
+- Configuration persistence in the rules.db `config` table (gnucash_book_path, company_name, org_number, company_address)
+- First-time setup wizard (`bookkeeping init`) that creates the rules database and prompts for all config values
 - The `import` subcommand orchestrates the full pipeline end-to-end
 - Clear, actionable error messages for all failure modes
 - Import log tracking (recording each import's stats in the `import_log` table)
@@ -27,10 +27,10 @@ This is Phase 4 (CLI, Config, and Polish) — the final integration phase. All c
 
 ### 2. Store configuration in rules.db config table
 **Rationale**: The rules.db schema already defines a `config` table (key-value TEXT pairs). Reusing it avoids a separate config file and keeps all tool state in one database. ConfigManager wraps simple SQL reads/writes.
-**Alternative considered**: TOML/YAML config file in `~/.config/bokforing/` — adds file management complexity and a second state location.
+**Alternative considered**: TOML/YAML config file in `~/.config/bookkeeping/` — adds file management complexity and a second state location.
 
 ### 3. Init wizard uses input() prompts
-**Rationale**: Simple, no dependencies. The wizard runs once (or rarely). It prompts for GnuCash book path (with default path resolution), company name, org_nummer, and address. Validates the GnuCash path exists before saving.
+**Rationale**: Simple, no dependencies. The wizard runs once (or rarely). It prompts for GnuCash book path (with default path resolution), company name, org_number, and address. Validates the GnuCash path exists before saving.
 **Alternative considered**: GTK4 dialog — overkill for a one-time setup; also would fail if GTK4 is not available.
 
 ### 4. Import subcommand orchestrates the full pipeline

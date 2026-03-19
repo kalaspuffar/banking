@@ -1,29 +1,29 @@
 ## ADDED Requirements
 
 ### Requirement: Parse bank CSV export
-The system SHALL provide a function `parse_bank_csv(filepath: Path) -> list[BankTransaction]` that reads a semicolon-delimited, UTF-8 encoded CSV file and returns a list of BankTransaction objects ordered by bokforingsdatum.
+The system SHALL provide a function `parse_bank_csv(filepath: Path) -> list[BankTransaction]` that reads a semicolon-delimited, UTF-8 encoded CSV file and returns a list of BankTransaction objects ordered by booking_date.
 
 #### Scenario: Successful parse of valid CSV
 - **WHEN** `parse_bank_csv` is called with a valid bank CSV file containing 3 transactions
-- **THEN** it returns a list of 3 BankTransaction objects sorted by bokforingsdatum ascending
+- **THEN** it returns a list of 3 BankTransaction objects sorted by booking_date ascending
 
 #### Scenario: Empty CSV with only headers
 - **WHEN** `parse_bank_csv` is called with a CSV file containing only the header row
 - **THEN** it returns an empty list
 
 ### Requirement: Validate CSV header row
-The system SHALL validate that the first row of the CSV contains exactly these column names: Bokföringsdatum, Valutadatum, Verifikationsnummer, Text, Belopp, Saldo.
+The system SHALL validate that the first row of the CSV contains exactly these column names: Bookkeepingsdatum, Valutadatum, Verifikationsnummer, Text, Belopp, Saldo.
 
 #### Scenario: Invalid header raises CSVParseError
 - **WHEN** `parse_bank_csv` is called with a CSV file whose header row has different column names
 - **THEN** a CSVParseError is raised with a message describing the expected vs actual headers
 
 ### Requirement: Parse Swedish date format
-The system SHALL parse date strings in YYYY-MM-DD format from the Bokföringsdatum and Valutadatum columns into Python `date` objects.
+The system SHALL parse date strings in YYYY-MM-DD format from the Bookkeepingsdatum and Valutadatum columns into Python `date` objects.
 
 #### Scenario: Valid date parsing
-- **WHEN** a row contains Bokföringsdatum "2026-01-28"
-- **THEN** the BankTransaction has `bokforingsdatum = date(2026, 1, 28)`
+- **WHEN** a row contains Bookkeepingsdatum "2026-01-28"
+- **THEN** the BankTransaction has `booking_date = date(2026, 1, 28)`
 
 #### Scenario: Invalid date raises CSVParseError
 - **WHEN** a row contains an unparseable date like "28/01/2026"
@@ -34,11 +34,11 @@ The system SHALL parse amount strings from the Belopp and Saldo columns (e.g., `
 
 #### Scenario: Negative amount parsing
 - **WHEN** a row contains Belopp "-125.000"
-- **THEN** the BankTransaction has `belopp = Decimal("-125.00")`
+- **THEN** the BankTransaction has `amount = Decimal("-125.00")`
 
 #### Scenario: Positive amount parsing
 - **WHEN** a row contains Belopp "10000.000"
-- **THEN** the BankTransaction has `belopp = Decimal("10000.00")`
+- **THEN** the BankTransaction has `amount = Decimal("10000.00")`
 
 ### Requirement: Reject malformed rows
 The system SHALL raise CSVParseError with the line number when a row has missing fields, unparseable amounts, or unparseable dates.

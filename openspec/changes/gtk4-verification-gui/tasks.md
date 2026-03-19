@@ -1,6 +1,6 @@
 ## 1. Application Shell
 
-- [ ] 1.1 Create `bokforing/gtk_app.py` with a `Gtk.Application` subclass (`BokforingApp`) that handles `gi.require_version('Gtk', '4.0')` with a graceful error message if GTK4/PyGObject is not installed
+- [ ] 1.1 Create `bookkeeping/gtk_app.py` with a `Gtk.Application` subclass (`BokforingApp`) that handles `gi.require_version('Gtk', '4.0')` with a graceful error message if GTK4/PyGObject is not installed
 - [ ] 1.2 Implement the main application window (`Gtk.ApplicationWindow`) with header bar titled "Bokforing - Import & Kategorisering", a scrolled main area, status bar, and action button row
 
 ## 2. Transaction Table (ColumnView)

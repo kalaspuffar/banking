@@ -4,7 +4,7 @@ The categorization engine needs persistent storage for its pattern-matching rule
 
 ## What Changes
 
-- Implement `bokforing/rules_db.py` with a `RulesDatabase` class providing:
+- Implement `bookkeeping/rules_db.py` with a `RulesDatabase` class providing:
   - `__init__(self, db_path: Path)` — open/create the SQLite database, create tables if not exist
   - `find_rule(self, transaction_text: str) -> Rule | None` — look up a matching rule (exact match first, then contains)
   - `save_rule(self, rule: Rule) -> None` — insert or update a rule with UNIQUE constraint on (pattern, match_type)
@@ -13,7 +13,7 @@ The categorization engine needs persistent storage for its pattern-matching rule
   - `delete_rule(self, rule_id: int) -> None` — remove a rule by ID
   - `export_rules(self, filepath: Path) -> None` — export all rules to a JSON file
   - `import_rules(self, filepath: Path) -> None` — import rules from a JSON file, logging the operation
-- SQLite database stored at `~/.local/share/bokforing/rules.db`
+- SQLite database stored at `~/.local/share/bookkeeping/rules.db`
 - Database schema includes three tables: `rules`, `config`, `import_log`
 - Create comprehensive unit tests in `tests/test_rules_db.py`
 
@@ -26,7 +26,7 @@ The categorization engine needs persistent storage for its pattern-matching rule
 
 ## Impact
 
-- **Code**: New module `bokforing/rules_db.py` and test file `tests/test_rules_db.py`
+- **Code**: New module `bookkeeping/rules_db.py` and test file `tests/test_rules_db.py`
 - **Dependencies**: Uses only Python stdlib (`sqlite3`, `json`, `pathlib`, `os`, `datetime`)
-- **Data**: Creates and manages `~/.local/share/bokforing/rules.db` with `rules`, `config`, and `import_log` tables
+- **Data**: Creates and manages `~/.local/share/bookkeeping/rules.db` with `rules`, `config`, and `import_log` tables
 - **Security**: Database file created with 0600 permissions (owner read/write only)

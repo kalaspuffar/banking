@@ -9,7 +9,7 @@ The target environment is Debian/Ubuntu Linux with Python ≥3.10 and GnuCash (S
 **Goals:**
 - Establish a pip-installable Python package with correct metadata and dependency declarations
 - Define all shared data model classes with full type annotations
-- Provide the `bokforing` CLI entry point (stub — actual CLI logic comes in a later phase)
+- Provide the `bookkeeping` CLI entry point (stub — actual CLI logic comes in a later phase)
 - Set up the test infrastructure (pytest, conftest fixtures)
 
 **Non-Goals:**
@@ -31,7 +31,7 @@ The target environment is Debian/Ubuntu Linux with Python ≥3.10 and GnuCash (S
 ### 3. Use `Decimal` for all monetary amounts
 **Rationale**: Required by SPECIFICATION.md to avoid float rounding errors. Swedish öre precision (2 decimal places) with banker's rounding (`ROUND_HALF_EVEN`).
 
-### 4. Custom exception hierarchy rooted in `BokforingError`
+### 4. Custom exception hierarchy rooted in `BookkeepingError`
 **Rationale**: All modules can raise domain-specific exceptions that callers can catch broadly or narrowly. `CSVParseError`, `GnuCashError`, etc. all inherit from a common base.
 
 ### 5. Place shared fixtures in `tests/conftest.py`

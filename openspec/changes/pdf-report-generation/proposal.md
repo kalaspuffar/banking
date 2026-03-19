@@ -1,13 +1,13 @@
 ## Why
 
-The proprietor needs PDF reports for tax filing (momsdeklaration, NE-bilaga) and legal archiving (grundbok, huvudbok). Swedish law (bokföringslagen) requires a chronological journal (grundbok) and a general ledger (huvudbok) to be archived for 7 years. The momsdeklaration and NE-bilaga summaries map GnuCash account totals directly to Skatteverket form fields (ruta numbers), enabling accurate manual transcription during tax filing.
+The proprietor needs PDF reports for tax filing (momsdeklaration, NE-bilaga) and legal archiving (grundbok, huvudbok). Swedish law (bookkeepingslagen) requires a chronological journal (grundbok) and a general ledger (huvudbok) to be archived for 7 years. The momsdeklaration and NE-bilaga summaries map GnuCash account totals directly to Skatteverket form fields (ruta numbers), enabling accurate manual transcription during tax filing.
 
 ## What Changes
 
-- Implement `bokforing/reports.py` with `generate_report(report_type, gnucash_book_path, fiscal_year, output_path, company_info) -> Path`
+- Implement `bookkeeping/reports.py` with `generate_report(report_type, gnucash_book_path, fiscal_year, output_path, company_info) -> Path`
 - Query GnuCash book via piecash for transaction data and account balances within a fiscal year
 - Aggregate amounts by BAS account ranges and map to Skatteverket ruta references
-- Create HTML/CSS templates in `bokforing/templates/`: `base.html`, `momsdeklaration.html`, `ne_bilaga.html`, `grundbok.html`, `huvudbok.html`
+- Create HTML/CSS templates in `bookkeeping/templates/`: `base.html`, `momsdeklaration.html`, `ne_bilaga.html`, `grundbok.html`, `huvudbok.html`
 - Use Jinja2 for HTML templating and WeasyPrint for HTML-to-PDF conversion
 - Generate A4-formatted PDFs with company info headers, page numbers, and fiscal year references
 
@@ -21,7 +21,7 @@ The proprietor needs PDF reports for tax filing (momsdeklaration, NE-bilaga) and
 
 ## Impact
 
-- **Code**: New module `bokforing/reports.py`, new directory `bokforing/templates/` with 5 HTML files, new tests in `tests/test_reports.py`
+- **Code**: New module `bookkeeping/reports.py`, new directory `bookkeeping/templates/` with 5 HTML files, new tests in `tests/test_reports.py`
 - **Dependencies**: Requires WeasyPrint (>=60.0) and Jinja2 (>=3.1), both already specified in the project's dependency list
 - **Data**: Reads from GnuCash SQLite book (via piecash, readonly), produces PDF files in the output directory
 - **Other components**: No changes to existing modules; depends on the same GnuCash book and BAS account structure used by other components
