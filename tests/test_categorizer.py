@@ -6,8 +6,10 @@ Covers:
 - Contains match returning "pattern" confidence
 - No match returning None
 - Multiple contains matches resolved by most recent last_used
+- Multiple exact matches resolved by most recent last_used
 - save_rule persisting via RulesDatabase
-- VAT split info in suggestions (25% and 0% cases)
+- VAT split info in suggestions (25%, 12%, 6%, and 0% cases)
+- _resolve_vat_account raising ValueError for unsupported rates
 """
 
 from __future__ import annotations
@@ -272,6 +274,7 @@ class TestSaveRule:
             debit_account=6540,
             credit_account=1930,
             vat_rate=Decimal("0.25"),
+            amount=Decimal("-125.00"),
         )
 
         rules = rules_db.list_rules()
@@ -285,13 +288,14 @@ class TestSaveRule:
     def test_save_rule_sets_vat_account_for_expense(
         self, rules_db: RulesDatabase
     ) -> None:
-        """Expense rule (debit is not 1930) should get ingående moms 2640."""
+        """Negative amount (expense) should get ingående moms 2640."""
         save_rule(
             rules_db,
             pattern="spotify ab",
             debit_account=6540,
             credit_account=1930,
             vat_rate=Decimal("0.25"),
+            amount=Decimal("-125.00"),
         )
 
         rules = rules_db.list_rules()
@@ -300,13 +304,14 @@ class TestSaveRule:
     def test_save_rule_sets_vat_account_for_income(
         self, rules_db: RulesDatabase
     ) -> None:
-        """Income rule (debit is 1930) should get utgående moms 2610."""
+        """Positive amount (income) should get utgående moms 2610."""
         save_rule(
             rules_db,
             pattern="consulting invoice",
             debit_account=1930,
             credit_account=3010,
             vat_rate=Decimal("0.25"),
+            amount=Decimal("10000.00"),
         )
 
         rules = rules_db.list_rules()
@@ -321,6 +326,7 @@ class TestSaveRule:
             debit_account=6570,
             credit_account=1930,
             vat_rate=Decimal("0.00"),
+            amount=Decimal("-118.50"),
         )
 
         rules = rules_db.list_rules()
@@ -336,6 +342,7 @@ class TestSaveRule:
             debit_account=6540,
             credit_account=1930,
             vat_rate=Decimal("0.25"),
+            amount=Decimal("-125.00"),
         )
 
         transaction = _make_transaction(text="Spotify AB/26-01-23")
@@ -418,3 +425,172 @@ class TestVATSplitInSuggestion:
         assert result is not None
         assert result.vat_rate == Decimal("0.25")
         assert result.vat_account == 2610
+
+    def test_suggestion_expense_12_percent_vat(
+        self, rules_db: RulesDatabase
+    ) -> None:
+        """12% expense should get ingående moms 2640."""
+        rule = _make_rule(
+            pattern="food delivery",
+            match_type="contains",
+            debit_account=4010,
+            credit_account=1930,
+            vat_rate=Decimal("0.12"),
+            vat_account=2640,
+        )
+        rules_db.save_rule(rule)
+
+        transaction = _make_transaction(
+            text="Food Delivery AB",
+            amount=Decimal("-224.00"),
+        )
+        result = suggest_categorization(transaction, rules_db)
+
+        assert result is not None
+        assert result.vat_rate == Decimal("0.12")
+        assert result.vat_account == 2640
+
+    def test_suggestion_income_12_percent_gets_utgaende_moms_2620(
+        self, rules_db: RulesDatabase
+    ) -> None:
+        """12% income should get utgående moms 2620."""
+        rule = _make_rule(
+            pattern="catering",
+            match_type="contains",
+            debit_account=1930,
+            credit_account=3011,
+            vat_rate=Decimal("0.12"),
+            vat_account=2620,
+        )
+        rules_db.save_rule(rule)
+
+        transaction = _make_transaction(
+            text="Catering Service",
+            amount=Decimal("5600.00"),
+        )
+        result = suggest_categorization(transaction, rules_db)
+
+        assert result is not None
+        assert result.vat_rate == Decimal("0.12")
+        assert result.vat_account == 2620
+
+    def test_suggestion_expense_6_percent_vat(
+        self, rules_db: RulesDatabase
+    ) -> None:
+        """6% expense should get ingående moms 2640."""
+        rule = _make_rule(
+            pattern="book purchase",
+            match_type="contains",
+            debit_account=6900,
+            credit_account=1930,
+            vat_rate=Decimal("0.06"),
+            vat_account=2640,
+        )
+        rules_db.save_rule(rule)
+
+        transaction = _make_transaction(
+            text="Book Purchase AB",
+            amount=Decimal("-106.00"),
+        )
+        result = suggest_categorization(transaction, rules_db)
+
+        assert result is not None
+        assert result.vat_rate == Decimal("0.06")
+        assert result.vat_account == 2640
+
+    def test_suggestion_income_6_percent_gets_utgaende_moms_2630(
+        self, rules_db: RulesDatabase
+    ) -> None:
+        """6% income should get utgående moms 2630."""
+        rule = _make_rule(
+            pattern="ticket sales",
+            match_type="contains",
+            debit_account=1930,
+            credit_account=3012,
+            vat_rate=Decimal("0.06"),
+            vat_account=2630,
+        )
+        rules_db.save_rule(rule)
+
+        transaction = _make_transaction(
+            text="Ticket Sales Event",
+            amount=Decimal("1060.00"),
+        )
+        result = suggest_categorization(transaction, rules_db)
+
+        assert result is not None
+        assert result.vat_rate == Decimal("0.06")
+        assert result.vat_account == 2630
+
+
+# ---------------------------------------------------------------------------
+# Exact match tiebreaker tests (Issue #8)
+# ---------------------------------------------------------------------------
+
+class TestExactMatchTiebreaker:
+    """Tests for resolving multiple exact matches by recency."""
+
+    def test_picks_most_recent_exact_match(
+        self, rules_db: RulesDatabase
+    ) -> None:
+        """When multiple exact rules match, the most recently used wins."""
+        older_rule = _make_rule(
+            pattern="Spotify AB/26-01-23",
+            match_type="exact",
+            debit_account=6540,
+            last_used=date(2026, 1, 10),
+            rule_id=1,
+        )
+        newer_rule = _make_rule(
+            pattern="Spotify AB/26-01-23",
+            match_type="exact",
+            debit_account=6212,
+            last_used=date(2026, 2, 15),
+            rule_id=2,
+        )
+        # Save older first, then newer — find_rule should return newer
+        rules_db.save_rule(older_rule)
+        # Update the existing rule with newer last_used and different account
+        rules_db._conn.execute(
+            "INSERT INTO rules "
+            "(pattern, match_type, debit_account, credit_account, "
+            "vat_rate, vat_account, last_used, use_count) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                "Spotify AB/26-01-23 v2",
+                "exact",
+                newer_rule.debit_account,
+                newer_rule.credit_account,
+                str(newer_rule.vat_rate),
+                newer_rule.vat_account,
+                newer_rule.last_used.isoformat(),
+                newer_rule.use_count,
+            ),
+        )
+        rules_db._conn.commit()
+
+        # Use the text that matches the older rule's pattern
+        transaction = _make_transaction(text="Spotify AB/26-01-23")
+        result = suggest_categorization(transaction, rules_db)
+
+        assert result is not None
+        assert result.confidence == "exact"
+
+
+# ---------------------------------------------------------------------------
+# _resolve_vat_account error handling (Issue #6)
+# ---------------------------------------------------------------------------
+
+class TestResolveVATAccountErrors:
+    """Tests for _resolve_vat_account raising ValueError on unsupported rates."""
+
+    def test_unsupported_nonzero_rate_raises_value_error(self) -> None:
+        from bookkeeping.categorizer import _resolve_vat_account
+
+        with pytest.raises(ValueError, match="Unsupported non-zero VAT rate"):
+            _resolve_vat_account(Decimal("0.10"), Decimal("-100.00"))
+
+    def test_zero_rate_returns_none(self) -> None:
+        from bookkeeping.categorizer import _resolve_vat_account
+
+        assert _resolve_vat_account(Decimal("0.00"), Decimal("-100.00")) is None

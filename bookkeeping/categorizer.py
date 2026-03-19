@@ -11,8 +11,9 @@ lowercases the text so that recurring vendor transactions like
 "Spotify AB/26-01-23" and "SPOTIFY AB/25-12-15" both match a rule for
 "spotify ab".
 
-When multiple contains rules match, the rule with the most recent ``last_used``
-date wins. Suggestions include VAT split information from :mod:`bookkeeping.vat`.
+When multiple rules match, ``RulesDatabase.find_rule()`` resolves ties by
+``last_used`` date (most recent wins). Suggestions include VAT account
+information determined from the rate and transaction direction.
 """
 
 from __future__ import annotations
@@ -24,10 +25,10 @@ from decimal import Decimal
 from bookkeeping.models import (
     BankTransaction,
     CategorizationSuggestion,
+    Confidence,
     Rule,
 )
 from bookkeeping.rules_db import RulesDatabase
-from bookkeeping.vat import apply_vat_split
 
 # Trailing date suffix pattern: /YY-MM-DD at end of string
 _DATE_SUFFIX_RE = re.compile(r"/\d{2}-\d{2}-\d{2}$")
@@ -78,7 +79,11 @@ def _resolve_vat_account(
 
     rate_accounts = _VAT_ACCOUNTS.get(vat_rate)
     if rate_accounts is None:
-        return None
+        supported = ", ".join(str(r) for r in sorted(_VAT_ACCOUNTS))
+        raise ValueError(
+            f"Unsupported non-zero VAT rate: {vat_rate}. "
+            f"Supported non-zero rates are: {supported}"
+        )
 
     direction = "expense" if amount < 0 else "income"
     return rate_accounts[direction]
@@ -90,13 +95,18 @@ def suggest_categorization(
 ) -> CategorizationSuggestion | None:
     """Suggest a BAS 2023 account mapping for a bank transaction.
 
-    Searches stored categorization rules in priority order:
-    1. Exact match on the full transaction text.
-    2. Contains match on the normalized text (lowercase, date-suffix-stripped).
-    3. If multiple contains rules match, picks the most recently used one.
+    Delegates matching to ``RulesDatabase.find_rule()``, which performs the
+    exact-then-contains priority search in SQL. The categorizer normalizes
+    the transaction text (stripping date suffixes) and passes the normalized
+    text to ``find_rule()`` for the contains search.
 
     Returns None if no rule matches, leaving the transaction for manual
     categorization in the GUI.
+
+    Note:
+        This function does **not** call ``rules_db.update_last_used()``.
+        The caller (typically the GUI confirmation step) is responsible for
+        updating ``last_used`` after the user accepts a suggestion.
 
     Args:
         transaction: The bank transaction to categorize.
@@ -106,26 +116,21 @@ def suggest_categorization(
         A CategorizationSuggestion with account mappings, VAT info, and
         confidence level, or None if no rule matches.
     """
-    all_rules = rules_db.list_rules()
+    # Priority 1: exact match on full (raw) transaction text
+    rule = rules_db.find_rule(transaction.text)
+    if rule and rule.match_type == "exact":
+        return _build_suggestion(transaction, rule, confidence="exact")
 
-    # Priority 1: exact match on full transaction text
-    exact_matches = [
-        rule for rule in all_rules
-        if rule.match_type == "exact" and rule.pattern == transaction.text
-    ]
-    if exact_matches:
-        best_rule = max(exact_matches, key=lambda r: r.last_used)
-        return _build_suggestion(transaction, best_rule, confidence="exact")
-
-    # Priority 2: contains match on normalized text
+    # Priority 2: contains match on normalized text (date-suffix-stripped)
     normalized = normalize_text(transaction.text)
-    contains_matches = [
-        rule for rule in all_rules
-        if rule.match_type == "contains" and rule.pattern in normalized
-    ]
-    if contains_matches:
-        best_rule = max(contains_matches, key=lambda r: r.last_used)
-        return _build_suggestion(transaction, best_rule, confidence="pattern")
+    if normalized != transaction.text:
+        rule = rules_db.find_rule(normalized)
+        if rule:
+            return _build_suggestion(transaction, rule, confidence="pattern")
+
+    # The first find_rule call may have returned a contains match already
+    if rule:
+        return _build_suggestion(transaction, rule, confidence="pattern")
 
     return None
 
@@ -133,12 +138,15 @@ def suggest_categorization(
 def _build_suggestion(
     transaction: BankTransaction,
     rule: Rule,
-    confidence: str,
+    confidence: Confidence,
 ) -> CategorizationSuggestion:
     """Build a CategorizationSuggestion from a matched rule.
 
-    Calls apply_vat_split to include VAT information and determines the
-    appropriate VAT account based on the rate and transaction direction.
+    Determines the appropriate VAT account based on the rate and transaction
+    direction (expense vs. income). The actual VAT split calculation is
+    deferred to the downstream JournalEntry construction step, since the
+    suggestion only needs to carry the rate and account — not the split
+    amounts.
 
     Args:
         transaction: The originating bank transaction.
@@ -148,7 +156,6 @@ def _build_suggestion(
     Returns:
         A fully populated CategorizationSuggestion.
     """
-    apply_vat_split(transaction.amount, rule.vat_rate)
     vat_account = _resolve_vat_account(rule.vat_rate, transaction.amount)
 
     return CategorizationSuggestion(
@@ -168,6 +175,7 @@ def save_rule(
     debit_account: int,
     credit_account: int,
     vat_rate: Decimal,
+    amount: Decimal,
 ) -> None:
     """Save a new categorization rule to the rules database.
 
@@ -175,8 +183,9 @@ def save_rule(
     user-created rules, since exact matches are typically auto-generated
     from confirmed transactions) and delegates to rules_db.save_rule().
 
-    The VAT account is determined automatically based on the VAT rate.
-    Rules with 0% VAT have no VAT account.
+    The VAT account is determined automatically from the VAT rate and the
+    sign of ``amount`` (negative = expense → ingående moms, positive =
+    income → utgående moms). Rules with 0% VAT have no VAT account.
 
     Args:
         rules_db: The rules database to save into.
@@ -185,17 +194,10 @@ def save_rule(
         debit_account: BAS account number to debit.
         credit_account: BAS account number to credit.
         vat_rate: VAT rate as a decimal fraction (e.g., Decimal("0.25")).
+        amount: A representative transaction amount whose sign determines
+            the VAT account direction (negative = expense, positive = income).
     """
-    # For save_rule, we use a negative amount sentinel to determine the
-    # VAT account direction. Since debit_account is the expense/asset
-    # account and credit_account is the bank, a non-bank debit implies
-    # an expense (negative amount direction).
-    # Heuristic: if debit_account is not 1930 (bank), it's an expense.
-    is_expense = debit_account != 1930
-    vat_account = _resolve_vat_account(
-        vat_rate,
-        Decimal("-1") if is_expense else Decimal("1"),
-    )
+    vat_account = _resolve_vat_account(vat_rate, amount)
 
     rule = Rule(
         id=None,
