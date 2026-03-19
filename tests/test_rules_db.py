@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from bookkeeping.models import Rule
+from bookkeeping.models import Rule, RulesDBError
 from bookkeeping.rules_db import RulesDatabase
 
 
@@ -382,8 +382,10 @@ class TestExportImport:
         assert len(rules) == 1
         assert rules[0].debit_account == 6212
 
-    def test_import_logs_operation(self, db: RulesDatabase, tmp_path: Path) -> None:
-        """Import writes an entry to the import_log table."""
+    def test_import_does_not_write_to_import_log(
+        self, db: RulesDatabase, tmp_path: Path
+    ) -> None:
+        """Rule import does not write to import_log (reserved for CSV imports)."""
         import sqlite3
 
         export_data = [
@@ -404,15 +406,12 @@ class TestExportImport:
 
         db.import_rules(import_path)
 
-        # Check the import_log table directly
         conn = sqlite3.connect(str(tmp_path / "test.db"))
-        conn.row_factory = sqlite3.Row
-        cursor = conn.execute("SELECT * FROM import_log")
-        logs = cursor.fetchall()
+        cursor = conn.execute("SELECT COUNT(*) FROM import_log")
+        count = cursor.fetchone()[0]
         conn.close()
 
-        assert len(logs) == 1
-        assert logs[0]["transactions_total"] == 1
+        assert count == 0
 
     def test_export_empty_database(self, db: RulesDatabase, tmp_path: Path) -> None:
         """Exporting an empty database produces an empty JSON array."""
@@ -422,3 +421,95 @@ class TestExportImport:
         with open(export_path, encoding="utf-8") as fh:
             data = json.load(fh)
         assert data == []
+
+
+# ---------------------------------------------------------------------------
+# 8.8 — Context manager and close
+# ---------------------------------------------------------------------------
+
+class TestContextManager:
+    """Tests for close(), __enter__, and __exit__."""
+
+    def test_close_method(self, tmp_path: Path) -> None:
+        """close() shuts the connection without error."""
+        db = RulesDatabase(tmp_path / "close_test.db")
+        db.save_rule(_make_rule(pattern="BeforeClose"))
+        db.close()
+
+        # Re-open to verify data was persisted before close
+        db2 = RulesDatabase(tmp_path / "close_test.db")
+        assert len(db2.list_rules()) == 1
+        db2.close()
+
+    def test_context_manager(self, tmp_path: Path) -> None:
+        """RulesDatabase can be used as a context manager."""
+        db_path = tmp_path / "ctx.db"
+        with RulesDatabase(db_path) as db:
+            db.save_rule(_make_rule(pattern="InContext"))
+
+        # Re-open to verify data persisted and connection was closed
+        with RulesDatabase(db_path) as db2:
+            rules = db2.list_rules()
+            assert len(rules) == 1
+            assert rules[0].pattern == "InContext"
+
+
+# ---------------------------------------------------------------------------
+# 8.9 — LIKE wildcard escaping in find_rule
+# ---------------------------------------------------------------------------
+
+class TestFindRuleWildcardEscaping:
+    """Tests that SQL LIKE wildcards in rule patterns do not cause false matches."""
+
+    def test_percent_in_pattern_does_not_wildcard(self, db: RulesDatabase) -> None:
+        """A pattern containing '%' matches literally, not as a LIKE wildcard."""
+        db.save_rule(_make_rule(pattern="100%", match_type="contains"))
+
+        # "100%" should match text containing the literal string "100%"
+        assert db.find_rule("Discount 100% off") is not None
+        # "1000 SEK" should NOT match — '%' is not a wildcard
+        assert db.find_rule("1000 SEK") is None
+
+    def test_underscore_in_pattern_does_not_wildcard(self, db: RulesDatabase) -> None:
+        """A pattern containing '_' matches literally, not as a LIKE wildcard."""
+        db.save_rule(_make_rule(pattern="item_name", match_type="contains"))
+
+        assert db.find_rule("buy item_name here") is not None
+        # "item3name" should NOT match — '_' is not a single-char wildcard
+        assert db.find_rule("buy item3name here") is None
+
+
+# ---------------------------------------------------------------------------
+# 8.10 — Error handling paths
+# ---------------------------------------------------------------------------
+
+class TestErrorHandling:
+    """Tests for RulesDBError on invalid inputs."""
+
+    def test_import_nonexistent_file(self, db: RulesDatabase, tmp_path: Path) -> None:
+        """Importing a non-existent file raises RulesDBError."""
+        with pytest.raises(RulesDBError, match="Failed to read rules"):
+            db.import_rules(tmp_path / "does_not_exist.json")
+
+    def test_import_invalid_json(self, db: RulesDatabase, tmp_path: Path) -> None:
+        """Importing a file with invalid JSON raises RulesDBError."""
+        bad_file = tmp_path / "bad.json"
+        bad_file.write_text("not valid json {{{", encoding="utf-8")
+
+        with pytest.raises(RulesDBError, match="Failed to read rules"):
+            db.import_rules(bad_file)
+
+    def test_import_non_array_json(self, db: RulesDatabase, tmp_path: Path) -> None:
+        """Importing a JSON object (not array) raises RulesDBError."""
+        obj_file = tmp_path / "object.json"
+        obj_file.write_text('{"key": "value"}', encoding="utf-8")
+
+        with pytest.raises(RulesDBError, match="Expected a JSON array"):
+            db.import_rules(obj_file)
+
+    def test_export_to_unwritable_path(self, db: RulesDatabase, tmp_path: Path) -> None:
+        """Exporting to a path where the parent doesn't exist raises RulesDBError."""
+        bad_path = tmp_path / "nonexistent_dir" / "subdir" / "rules.json"
+
+        with pytest.raises(RulesDBError, match="Failed to export rules"):
+            db.export_rules(bad_path)

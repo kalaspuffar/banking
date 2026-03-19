@@ -8,7 +8,6 @@ backup, export, and upgrade. See SPECIFICATION.md section 4.2 for the schema.
 from __future__ import annotations
 
 import json
-import os
 import sqlite3
 from datetime import date, datetime
 from decimal import Decimal
@@ -81,7 +80,11 @@ def _row_to_rule(row: sqlite3.Row) -> Rule:
 
 
 def _rule_to_dict(rule: Rule) -> dict:
-    """Convert a Rule dataclass to a JSON-serialisable dictionary."""
+    """Convert a Rule dataclass to a JSON-serialisable dictionary.
+
+    Note: match_type is a Literal["exact", "contains"] type alias, not an enum.
+    It serialises directly as a plain string.
+    """
     return {
         "pattern": rule.pattern,
         "match_type": rule.match_type,
@@ -122,7 +125,7 @@ class RulesDatabase:
 
     def __init__(self, db_path: Path) -> None:
         self._db_path = Path(db_path)
-        os.makedirs(self._db_path.parent, exist_ok=True)
+        self._db_path.parent.mkdir(parents=True, exist_ok=True)
 
         try:
             self._conn = sqlite3.connect(str(self._db_path))
@@ -136,7 +139,17 @@ class RulesDatabase:
         except sqlite3.Error as exc:
             raise RulesDBError(f"Failed to initialise database at {db_path}: {exc}") from exc
 
-        os.chmod(self._db_path, 0o600)
+        self._db_path.chmod(0o600)
+
+    def close(self) -> None:
+        """Close the database connection."""
+        self._conn.close()
+
+    def __enter__(self) -> RulesDatabase:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.close()
 
     # ------------------------------------------------------------------
     # Find rule with priority logic
@@ -167,11 +180,17 @@ class RulesDatabase:
             if row is not None:
                 return _row_to_rule(row)
 
-            # Priority 2: contains match (case-insensitive via LIKE)
+            # Priority 2: contains match (case-insensitive via LOWER).
+            # SQLite LIKE is case-insensitive for ASCII but not for Unicode
+            # characters (å, ä, ö), so we use LOWER() on both sides.
+            # Patterns are escaped to prevent SQL LIKE wildcards (% _) in
+            # rule patterns from matching unintended text.
             cursor = self._conn.execute(
                 "SELECT * FROM rules "
-                "WHERE match_type = 'contains' AND ? LIKE '%' || pattern || '%' "
-                "COLLATE NOCASE "
+                "WHERE match_type = 'contains' "
+                "AND LOWER(?) LIKE '%' || REPLACE(REPLACE(REPLACE("
+                "LOWER(pattern), '\\', '\\\\'), '%', '\\%'), '_', '\\_') || '%' "
+                "ESCAPE '\\' "
                 "ORDER BY last_used DESC LIMIT 1",
                 (transaction_text,),
             )
@@ -310,8 +329,10 @@ class RulesDatabase:
 
         Each rule in the JSON array is saved via save_rule, so existing
         rules with the same (pattern, match_type) are updated rather
-        than duplicated. The import operation is logged in the import_log
-        table.
+        than duplicated.
+
+        Note: the import_log table is reserved for CSV import operations
+        (see SPECIFICATION.md Section 4.2), so rule imports are not logged there.
 
         Args:
             filepath: Path to a JSON file containing an array of rule objects.
@@ -330,16 +351,3 @@ class RulesDatabase:
         for entry in data:
             rule = _dict_to_rule(entry)
             self.save_rule(rule)
-
-        # Log the import operation
-        try:
-            self._conn.execute(
-                "INSERT INTO import_log "
-                "(csv_filename, transactions_total, transactions_new, "
-                "transactions_dup, transactions_error) "
-                "VALUES (?, ?, ?, ?, ?)",
-                (str(filepath), len(data), len(data), 0, 0),
-            )
-            self._conn.commit()
-        except sqlite3.Error as exc:
-            raise RulesDBError(f"Failed to log import from {filepath}: {exc}") from exc
