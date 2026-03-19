@@ -37,6 +37,13 @@ This project uses the **OpenSpec spec-driven workflow** via Claude Code skills a
 - `openspec/changes/` — Active changes with artifacts
 - `openspec/changes/archive/` — Completed changes
 
+## Development Environment
+
+- **Python virtual environment**: Use the venv at `.venv/` for all Python commands. The system Python (PEP 668) does not allow `pip install` without `--break-system-packages`.
+- **Activate before running**: `source .venv/bin/activate` before running `python`, `pytest`, or `pip install`.
+- **Running tests**: `source .venv/bin/activate && python -m pytest tests/ -v`
+- **Installing the package**: `source .venv/bin/activate && pip install -e ".[dev]"`
+
 ## Personas
 
 When loaded as system prompts, the personas define structured roles:
