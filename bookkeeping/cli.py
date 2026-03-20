@@ -80,6 +80,50 @@ def _resolve_book_path(args_book: str | None) -> Path:
     return book_path
 
 
+def _load_bas_accounts() -> list:
+    """Load BAS 2023 accounts from the bundled bas2023.csv file.
+
+    Parses the BAS CSV (which has a non-standard layout) and returns a list
+    of AccountItem objects suitable for the GTK4 account selector. Only
+    4-digit "underkonton" (sub-accounts) are included.
+
+    Returns:
+        List of AccountItem objects sorted by account code.
+    """
+    import csv
+    from decimal import Decimal
+
+    from bookkeeping.gtk_app import AccountItem
+
+    bas_csv_path = Path(__file__).parent.parent / "bas2023.csv"
+    if not bas_csv_path.is_file():
+        print(
+            f"Warning: BAS 2023 CSV not found at {bas_csv_path}. "
+            "Account selector will be empty.",
+            file=sys.stderr,
+        )
+        return []
+
+    accounts: list[AccountItem] = []
+    with bas_csv_path.open(mode="r", encoding="utf-8-sig", newline="") as f:
+        reader = csv.reader(f)
+        for row in reader:
+            if len(row) < 8:
+                continue
+            code_str = row[6].strip() if row[6] else ""
+            name = row[7].strip() if row[7] else ""
+            # Only include 4-digit account codes (underkonton)
+            if len(code_str) == 4 and code_str.isdigit() and name:
+                accounts.append(AccountItem(
+                    code=int(code_str),
+                    name=name,
+                    vat_rate=Decimal("0.00"),
+                ))
+
+    accounts.sort(key=lambda a: a.code)
+    return accounts
+
+
 # ---------------------------------------------------------------------------
 # Subcommand handlers
 # ---------------------------------------------------------------------------
@@ -169,9 +213,10 @@ def _prompt_required(prompt_text: str, default: str) -> str:
 
 def _handle_import(args: argparse.Namespace) -> None:
     """Run the import pipeline."""
-    from bookkeeping.categorizer import suggest_categorization
+    from bookkeeping.categorizer import apply_aliases, suggest_categorization
     from bookkeeping.csv_parser import parse_bank_csv
     from bookkeeping.dedup import filter_duplicates
+    from bookkeeping.models import BankTransaction
     from bookkeeping.rules_db import RulesDatabase
 
     csv_path = Path(args.csv_file)
@@ -194,6 +239,26 @@ def _handle_import(args: argparse.Namespace) -> None:
         return
 
     with RulesDatabase(_DEFAULT_DB_PATH) as rules_db:
+        # Apply text aliases before categorization
+        aliases = rules_db.list_aliases()
+        if aliases:
+            aliased_transactions: list[BankTransaction] = []
+            for t in new_transactions:
+                replacement = apply_aliases(t.text, aliases)
+                if replacement is not None:
+                    # Create new frozen instance with display_text set
+                    t = BankTransaction(
+                        booking_date=t.booking_date,
+                        value_date=t.value_date,
+                        verification_number=t.verification_number,
+                        text=t.text,
+                        amount=t.amount,
+                        balance=t.balance,
+                        display_text=replacement,
+                    )
+                aliased_transactions.append(t)
+            new_transactions = aliased_transactions
+
         suggestions = [
             suggest_categorization(t, rules_db) for t in new_transactions
         ]
@@ -212,7 +277,11 @@ def _handle_import(args: argparse.Namespace) -> None:
         return
 
     # Full GUI mode
-    _handle_import_gui(new_transactions, suggestions, book_path, csv_path)
+    _handle_import_gui(
+        new_transactions, suggestions, book_path, csv_path,
+        new_count=len(new_transactions),
+        duplicate_count=len(duplicates),
+    )
 
 
 def _print_dry_run_summary(
@@ -260,6 +329,8 @@ def _handle_import_gui(
     suggestions: list,
     book_path: Path,
     csv_path: Path,
+    new_count: int = 0,
+    duplicate_count: int = 0,
 ) -> None:
     """Launch the GTK4 verification GUI for import."""
     try:
@@ -277,6 +348,8 @@ def _handle_import_gui(
 
     app = BookkeepingApp()
 
+    accounts = _load_bas_accounts()
+
     def on_save(entries: list) -> None:
         result = write_transactions(book_path, entries)
         print(f"Wrote {result.transactions_written} transactions to GnuCash.")
@@ -287,7 +360,7 @@ def _handle_import_gui(
             csv_path,
             transactions_total=len(transactions),
             transactions_new=result.transactions_written,
-            transactions_dup=0,
+            transactions_dup=duplicate_count,
             transactions_error=len(result.errors),
         )
 
@@ -304,9 +377,10 @@ def _handle_import_gui(
                 )
 
     app.configure(
-        transactions=transactions,
         suggestions=suggestions,
-        gnucash_book_path=book_path,
+        accounts=accounts,
+        new_count=new_count,
+        duplicate_count=duplicate_count,
         on_save=on_save,
         on_save_rules=on_save_rules,
     )
@@ -434,8 +508,10 @@ def _handle_rules(args: argparse.Namespace) -> None:
         _handle_rules_export(args.file)
     elif args.rules_command == "import":
         _handle_rules_import(args.file)
+    elif args.rules_command == "create":
+        _handle_rules_create(args)
     else:
-        print("Error: Specify a rules subcommand (list, delete, export, import).", file=sys.stderr)
+        print("Error: Specify a rules subcommand (list, delete, export, import, create).", file=sys.stderr)
         sys.exit(EXIT_USAGE_ERROR)
 
 
@@ -501,6 +577,92 @@ def _handle_rules_import(filepath: str) -> None:
     with RulesDatabase(_DEFAULT_DB_PATH) as db:
         db.import_rules(path)
     print(f"Rules imported from {filepath}")
+
+
+def _handle_rules_create(args: argparse.Namespace) -> None:
+    """Create a new categorization rule from CLI arguments."""
+    from decimal import Decimal
+
+    from bookkeeping.categorizer import save_rule
+    from bookkeeping.rules_db import RulesDatabase
+
+    vat_rate = Decimal(args.vat_rate)
+
+    # save_rule needs an amount to determine VAT account direction.
+    # For CLI-created rules, default to expense (negative) since most
+    # manually created rules are for expense categorization.
+    amount = Decimal("-1")
+
+    with RulesDatabase(_DEFAULT_DB_PATH) as rules_db:
+        save_rule(
+            rules_db,
+            pattern=args.pattern,
+            debit_account=args.debit_account,
+            credit_account=args.credit_account,
+            vat_rate=vat_rate,
+            amount=amount,
+            match_type=args.match_type,
+        )
+    print(
+        f"Rule created: '{args.pattern}' → "
+        f"debit={args.debit_account}, credit={args.credit_account}, "
+        f"vat={args.vat_rate}, type={args.match_type}"
+    )
+
+
+def _handle_alias(args: argparse.Namespace) -> None:
+    """Handle alias subcommands."""
+    if args.alias_command == "list":
+        _handle_alias_list()
+    elif args.alias_command == "add":
+        _handle_alias_add(args.pattern, args.replacement)
+    elif args.alias_command == "delete":
+        _handle_alias_delete(args.alias_id)
+    else:
+        print(
+            "Error: Specify an alias subcommand (list, add, delete).",
+            file=sys.stderr,
+        )
+        sys.exit(EXIT_USAGE_ERROR)
+
+
+def _handle_alias_list() -> None:
+    """Display all text aliases in a formatted table."""
+    from bookkeeping.rules_db import RulesDatabase
+
+    with RulesDatabase(_DEFAULT_DB_PATH) as db:
+        aliases = db.list_aliases()
+
+    if not aliases:
+        print("Inga alias konfigurerade.")
+        return
+
+    header = f"{'ID':>4}  {'Pattern':<30}  {'Replacement':<30}"
+    print(header)
+    print("-" * len(header))
+    for alias in aliases:
+        print(
+            f"{alias.id:>4}  {alias.pattern[:30]:<30}  "
+            f"{alias.replacement[:30]:<30}"
+        )
+
+
+def _handle_alias_add(pattern: str, replacement: str) -> None:
+    """Add or update a text alias."""
+    from bookkeeping.rules_db import RulesDatabase
+
+    with RulesDatabase(_DEFAULT_DB_PATH) as db:
+        db.add_alias(pattern, replacement)
+    print(f"Alias saved: '{pattern}' → '{replacement}'")
+
+
+def _handle_alias_delete(alias_id: int) -> None:
+    """Delete a text alias by ID."""
+    from bookkeeping.rules_db import RulesDatabase
+
+    with RulesDatabase(_DEFAULT_DB_PATH) as db:
+        db.delete_alias(alias_id)
+    print(f"Alias {alias_id} deleted.")
 
 
 def _handle_config(args: argparse.Namespace) -> None:
@@ -627,7 +789,56 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     import_rules_parser.add_argument("file", help="Input JSON file path")
 
+    create_parser = rules_sub.add_parser(
+        "create", help="Create a new categorization rule"
+    )
+    create_parser.add_argument(
+        "--pattern", required=True, help="Text pattern to match"
+    )
+    create_parser.add_argument(
+        "--debit-account", type=int, required=True,
+        help="BAS account number to debit"
+    )
+    create_parser.add_argument(
+        "--credit-account", type=int, required=True,
+        help="BAS account number to credit"
+    )
+    create_parser.add_argument(
+        "--vat-rate", type=str, default="0.00",
+        help="VAT rate as decimal fraction (default: 0.00)"
+    )
+    create_parser.add_argument(
+        "--match-type", choices=["exact", "contains"], default="contains",
+        help="Match type (default: contains)"
+    )
+
     rules_parser.set_defaults(handler=_handle_rules)
+
+    # --- alias ---
+    alias_parser = subparsers.add_parser(
+        "alias", help="Manage transaction text aliases"
+    )
+    alias_sub = alias_parser.add_subparsers(dest="alias_command")
+
+    alias_sub.add_parser("list", help="List all aliases")
+
+    alias_add_parser = alias_sub.add_parser("add", help="Add or update an alias")
+    alias_add_parser.add_argument(
+        "--pattern", required=True, help="Substring to match in transaction text"
+    )
+    alias_add_parser.add_argument(
+        "--replacement", required=True,
+        help="Human-readable replacement text"
+    )
+
+    alias_delete_parser = alias_sub.add_parser(
+        "delete", help="Delete an alias by ID"
+    )
+    alias_delete_parser.add_argument(
+        "alias_id", type=int, help="Alias ID to delete"
+    )
+
+    alias_parser.set_defaults(handler=_handle_alias)
 
     # --- config ---
     config_parser = subparsers.add_parser(

@@ -123,7 +123,7 @@ def parse_bank_csv(filepath: Path) -> list[BankTransaction]:
     """
     transactions: list[BankTransaction] = []
 
-    with filepath.open(mode="r", encoding="utf-8", newline="") as csv_file:
+    with filepath.open(mode="r", encoding="utf-8-sig", newline="") as csv_file:
         reader = csv.reader(csv_file, delimiter=";")
 
         # Validate header row
