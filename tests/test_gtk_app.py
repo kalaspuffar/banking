@@ -226,14 +226,19 @@ class TestBuildJournalEntry:
         assert expense.amount == Decimal("118.50")
 
     def test_income_with_25_percent_vat(self):
-        """Income +10000 SEK with 25% VAT produces correct 3-way split."""
+        """Income +10000 SEK with 25% VAT produces correct 3-way split.
+
+        For income, the bank account (1930) is the debit_account and the
+        revenue account (3010) is the credit_account — following standard
+        double-entry convention.
+        """
         entry = build_journal_entry(
             verification_number="12340",
             booking_date=date(2026, 1, 15),
             description="Kund AB betalning",
             amount=Decimal("10000.00"),
-            debit_account=3010,
-            credit_account=1930,
+            debit_account=1930,
+            credit_account=3010,
             vat_rate=Decimal("0.25"),
             vat_account=2610,
         )
@@ -242,27 +247,30 @@ class TestBuildJournalEntry:
         total = sum(s.amount for s in entry.splits)
         assert total == Decimal("0")
 
-        # Bank gets +10000
+        # Bank gets +10000 (debit — full gross amount)
         bank = next(s for s in entry.splits if s.account_code == 1930)
         assert bank.amount == Decimal("10000.00")
 
-        # Revenue gets -8000 (credit)
+        # Revenue gets -8000 (credit — net amount)
         revenue = next(s for s in entry.splits if s.account_code == 3010)
         assert revenue.amount == Decimal("-8000.00")
 
-        # VAT gets -2000 (credit)
+        # VAT gets -2000 (credit — output VAT)
         vat = next(s for s in entry.splits if s.account_code == 2610)
         assert vat.amount == Decimal("-2000.00")
 
     def test_income_no_vat(self):
-        """Income with 0% VAT produces a simple 2-way split."""
+        """Income with 0% VAT produces a simple 2-way split.
+
+        For income, debit_account=bank, credit_account=revenue.
+        """
         entry = build_journal_entry(
             verification_number="12341",
             booking_date=date(2026, 1, 20),
             description="YouTube revenue",
             amount=Decimal("500.00"),
-            debit_account=3040,
-            credit_account=1930,
+            debit_account=1930,
+            credit_account=3040,
             vat_rate=Decimal("0.00"),
             vat_account=None,
         )
@@ -270,6 +278,14 @@ class TestBuildJournalEntry:
         assert len(entry.splits) == 2
         total = sum(s.amount for s in entry.splits)
         assert total == Decimal("0")
+
+        # Bank gets +500 (debit)
+        bank = next(s for s in entry.splits if s.account_code == 1930)
+        assert bank.amount == Decimal("500.00")
+
+        # Revenue gets -500 (credit)
+        revenue = next(s for s in entry.splits if s.account_code == 3040)
+        assert revenue.amount == Decimal("-500.00")
 
 
 # ---------------------------------------------------------------------------

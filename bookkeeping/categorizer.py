@@ -27,6 +27,7 @@ from bookkeeping.models import (
     CategorizationSuggestion,
     Confidence,
     Rule,
+    TextAlias,
 )
 from bookkeeping.rules_db import RulesDatabase
 
@@ -89,6 +90,44 @@ def resolve_vat_account(
     return rate_accounts[direction]
 
 
+def _try_match(
+    transaction: BankTransaction,
+    text: str,
+    rules_db: RulesDatabase,
+) -> CategorizationSuggestion | None:
+    """Attempt to match a text string against the rules database.
+
+    Tries an exact match first, then a contains match on both the raw and
+    normalized (date-suffix-stripped) versions of the text.
+
+    Args:
+        transaction: The originating bank transaction.
+        text: The text to match against rule patterns.
+        rules_db: The rules database to search.
+
+    Returns:
+        A CategorizationSuggestion if a rule matches, otherwise None.
+    """
+    rule = rules_db.find_rule(text)
+    if rule and rule.match_type == "exact":
+        return _build_suggestion(transaction, rule, confidence="exact")
+
+    # Try normalized text (date-suffix-stripped, lowercased)
+    normalized = normalize_text(text)
+    if normalized != text:
+        rule_from_normalized = rules_db.find_rule(normalized)
+        if rule_from_normalized:
+            return _build_suggestion(
+                transaction, rule_from_normalized, confidence="pattern"
+            )
+
+    # The first find_rule call may have returned a contains match
+    if rule:
+        return _build_suggestion(transaction, rule, confidence="pattern")
+
+    return None
+
+
 def suggest_categorization(
     transaction: BankTransaction,
     rules_db: RulesDatabase,
@@ -116,21 +155,20 @@ def suggest_categorization(
         A CategorizationSuggestion with account mappings, VAT info, and
         confidence level, or None if no rule matches.
     """
-    # Priority 1: exact match on full (raw) transaction text
-    rule = rules_db.find_rule(transaction.text)
-    if rule and rule.match_type == "exact":
-        return _build_suggestion(transaction, rule, confidence="exact")
+    # Try matching against the original bank text first, then fall back
+    # to display_text (alias-rewritten) so that rules work regardless of
+    # whether they target the raw bank code or the human-readable alias.
+    raw_text = transaction.text
 
-    # Priority 2: contains match on normalized text (date-suffix-stripped)
-    normalized = normalize_text(transaction.text)
-    if normalized != transaction.text:
-        rule = rules_db.find_rule(normalized)
-        if rule:
-            return _build_suggestion(transaction, rule, confidence="pattern")
+    result = _try_match(transaction, raw_text, rules_db)
+    if result is not None:
+        return result
 
-    # The first find_rule call may have returned a contains match already
-    if rule:
-        return _build_suggestion(transaction, rule, confidence="pattern")
+    # Fall back to display_text when available (alias-rewritten text)
+    if transaction.display_text:
+        result = _try_match(transaction, transaction.display_text, rules_db)
+        if result is not None:
+            return result
 
     return None
 
@@ -169,6 +207,28 @@ def _build_suggestion(
     )
 
 
+def apply_aliases(text: str, aliases: list[TextAlias]) -> str | None:
+    """Find the first matching alias for a transaction text.
+
+    Aliases are expected to be ordered by pattern length descending (longest
+    first), so more specific patterns take priority. Matching is
+    case-insensitive substring containment.
+
+    Args:
+        text: Raw transaction description from the bank CSV.
+        aliases: List of TextAlias objects, ordered longest-pattern-first.
+
+    Returns:
+        The replacement text from the first matching alias, or None if
+        no alias matches.
+    """
+    text_lower = text.lower()
+    for alias in aliases:
+        if alias.pattern.lower() in text_lower:
+            return alias.replacement
+    return None
+
+
 def save_rule(
     rules_db: RulesDatabase,
     pattern: str,
@@ -176,12 +236,13 @@ def save_rule(
     credit_account: int,
     vat_rate: Decimal,
     amount: Decimal,
+    match_type: MatchType = "contains",
 ) -> None:
     """Save a new categorization rule to the rules database.
 
-    Creates a Rule object with match_type "contains" (the default for
-    user-created rules, since exact matches are typically auto-generated
-    from confirmed transactions) and delegates to rules_db.save_rule().
+    Creates a Rule object and delegates to rules_db.save_rule(). The default
+    match_type is "contains" (for user-created rules), but "exact" can be
+    specified for precise text matching.
 
     The VAT account is determined automatically from the VAT rate and the
     sign of ``amount`` (negative = expense → ingående moms, positive =
@@ -196,13 +257,14 @@ def save_rule(
         vat_rate: VAT rate as a decimal fraction (e.g., Decimal("0.25")).
         amount: A representative transaction amount whose sign determines
             the VAT account direction (negative = expense, positive = income).
+        match_type: Either "exact" or "contains" (default).
     """
     vat_account = resolve_vat_account(vat_rate, amount)
 
     rule = Rule(
         id=None,
         pattern=pattern,
-        match_type="contains",
+        match_type=match_type,
         debit_account=debit_account,
         credit_account=credit_account,
         vat_rate=vat_rate,

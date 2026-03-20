@@ -326,6 +326,39 @@ class TestBlankRowHandling:
 # Edge cases
 # ---------------------------------------------------------------------------
 
+class TestBOMEncoding:
+    """Tests for UTF-8 BOM handling in CSV files."""
+
+    def test_bom_encoded_csv_parses_correctly(self) -> None:
+        """A CSV saved with UTF-8 BOM parses identically to one without."""
+        result_bom = parse_bank_csv(FIXTURES_DIR / "sample_bank_bom.csv")
+        result_plain = parse_bank_csv(FIXTURES_DIR / "sample_bank.csv")
+        assert len(result_bom) == len(result_plain)
+        for bom_txn, plain_txn in zip(result_bom, result_plain):
+            assert bom_txn.booking_date == plain_txn.booking_date
+            assert bom_txn.text == plain_txn.text
+            assert bom_txn.amount == plain_txn.amount
+            assert bom_txn.balance == plain_txn.balance
+
+    def test_non_bom_csv_still_parses(self) -> None:
+        """Regression guard: non-BOM UTF-8 CSV continues to parse correctly."""
+        result = parse_bank_csv(FIXTURES_DIR / "sample_bank.csv")
+        assert len(result) == 6
+        assert all(isinstance(t, BankTransaction) for t in result)
+
+    def test_bom_header_validation_passes(self, tmp_path: Path) -> None:
+        """BOM-prefixed header validates correctly against expected column names."""
+        csv_file = tmp_path / "bom_header.csv"
+        csv_file.write_bytes(
+            b"\xef\xbb\xbf"
+            + "Bokföringsdatum;Valutadatum;Verifikationsnummer;Text;Belopp;Saldo\n"
+              "2026-01-28;2026-01-28;12345;Test;-100.000;1000.000\n".encode("utf-8")
+        )
+        result = parse_bank_csv(csv_file)
+        assert len(result) == 1
+        assert result[0].text == "Test"
+
+
 class TestEdgeCases:
     """Edge case tests: UTF-8 Swedish characters, negative zero, large amounts."""
 

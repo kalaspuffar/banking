@@ -13,7 +13,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 
-from bookkeeping.models import MatchType, Rule, RulesDBError
+from bookkeeping.models import MatchType, Rule, RulesDBError, TextAlias
 
 # ---------------------------------------------------------------------------
 # SQL schema constants (matching SPECIFICATION.md section 4.2)
@@ -52,6 +52,15 @@ CREATE TABLE IF NOT EXISTS import_log (
     transactions_new    INTEGER NOT NULL,
     transactions_dup    INTEGER NOT NULL,
     transactions_error  INTEGER NOT NULL
+);
+"""
+
+_CREATE_ALIASES_TABLE = """\
+CREATE TABLE IF NOT EXISTS aliases (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    pattern     TEXT NOT NULL UNIQUE,
+    replacement TEXT NOT NULL,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
 );
 """
 
@@ -133,6 +142,7 @@ class RulesDatabase:
             self._conn.execute(_CREATE_RULES_TABLE)
             self._conn.execute(_CREATE_CONFIG_TABLE)
             self._conn.execute(_CREATE_IMPORT_LOG_TABLE)
+            self._conn.execute(_CREATE_ALIASES_TABLE)
             self._conn.execute(_CREATE_INDEX_PATTERN)
             self._conn.execute(_CREATE_INDEX_LAST_USED)
             self._conn.commit()
@@ -346,6 +356,70 @@ class RulesDatabase:
             raise RulesDBError(
                 f"Failed to log import for {csv_filename!r}: {exc}"
             ) from exc
+
+    # ------------------------------------------------------------------
+    # Text alias CRUD
+    # ------------------------------------------------------------------
+
+    def add_alias(self, pattern: str, replacement: str) -> None:
+        """Add or update a text alias.
+
+        Uses upsert semantics: if a pattern already exists, its replacement
+        is updated.
+
+        Args:
+            pattern: Substring to match in transaction text.
+            replacement: Human-readable replacement text.
+        """
+        try:
+            self._conn.execute(
+                "INSERT INTO aliases (pattern, replacement) VALUES (?, ?) "
+                "ON CONFLICT(pattern) DO UPDATE SET replacement = excluded.replacement",
+                (pattern, replacement),
+            )
+            self._conn.commit()
+        except sqlite3.Error as exc:
+            raise RulesDBError(f"Failed to add alias {pattern!r}: {exc}") from exc
+
+    def delete_alias(self, alias_id: int) -> None:
+        """Delete a text alias by its database ID.
+
+        No error is raised if the alias does not exist.
+
+        Args:
+            alias_id: The database ID of the alias to delete.
+        """
+        try:
+            self._conn.execute("DELETE FROM aliases WHERE id = ?", (alias_id,))
+            self._conn.commit()
+        except sqlite3.Error as exc:
+            raise RulesDBError(f"Failed to delete alias {alias_id}: {exc}") from exc
+
+    def list_aliases(self) -> list[TextAlias]:
+        """Return all text aliases ordered by pattern length descending.
+
+        Longer patterns are returned first so that more specific matches
+        take priority when applying aliases.
+
+        Returns:
+            List of all aliases, longest pattern first. Empty list if
+            no aliases exist.
+        """
+        try:
+            cursor = self._conn.execute(
+                "SELECT * FROM aliases ORDER BY LENGTH(pattern) DESC, id ASC"
+            )
+            return [
+                TextAlias(
+                    id=row["id"],
+                    pattern=row["pattern"],
+                    replacement=row["replacement"],
+                    created_at=datetime.fromisoformat(row["created_at"]),
+                )
+                for row in cursor.fetchall()
+            ]
+        except sqlite3.Error as exc:
+            raise RulesDBError(f"Failed to list aliases: {exc}") from exc
 
     # ------------------------------------------------------------------
     # Export / import JSON

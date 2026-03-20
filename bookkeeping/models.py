@@ -8,7 +8,7 @@ updates from database operations.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal
 
@@ -58,6 +58,9 @@ class BankTransaction:
         text: Human-readable transaction description (CSV: Text).
         amount: Amount in SEK, negative = expense, positive = income (CSV: Belopp).
         balance: Running account balance after this transaction (CSV: Saldo).
+        display_text: Alias-rewritten description, or None if no alias matched.
+            When set, categorization and the GUI use this instead of text.
+            The original text is preserved for audit purposes.
     """
 
     booking_date: date
@@ -66,6 +69,7 @@ class BankTransaction:
     text: str
     amount: Decimal
     balance: Decimal
+    display_text: str | None = None
 
     def __post_init__(self) -> None:
         # verification_number may be empty for transactions that lack one;
@@ -228,3 +232,23 @@ class Rule:
                 f"match_type must be one of {sorted(_VALID_MATCH_TYPES)}, "
                 f"got {self.match_type!r}"
             )
+
+
+@dataclass(frozen=True)
+class TextAlias:
+    """A mapping from a raw bank transaction text pattern to a readable name.
+
+    Aliases are applied before categorization so that cryptic bank texts
+    (account numbers, abbreviated codes) become human-readable descriptions.
+
+    Attributes:
+        id: Database primary key, or None for unsaved aliases.
+        pattern: Substring to match in the raw transaction text.
+        replacement: Human-readable text to replace the transaction description.
+        created_at: Timestamp when the alias was created.
+    """
+
+    id: int | None
+    pattern: str
+    replacement: str
+    created_at: datetime | None = None

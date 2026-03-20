@@ -44,16 +44,28 @@ def build_journal_entry(
     """
     splits: list[JournalEntrySplit] = []
 
+    # Identify which account is the bank account (receives the full gross
+    # amount) and which is the counter account (expense/revenue, receives
+    # the net amount).  For expenses (amount < 0) the bank is credited
+    # (credit_account), for income (amount > 0) the bank is debited
+    # (debit_account).
+    if amount < Decimal("0.00"):
+        bank_account = credit_account
+        counter_account = debit_account
+    else:
+        bank_account = debit_account
+        counter_account = credit_account
+
     if vat_rate > Decimal("0.00"):
         vat_split = apply_vat_split(amount, vat_rate)
-        # Bank split (credit_account, typically 1930)
+        # Bank split: full gross amount
         splits.append(JournalEntrySplit(
-            account_code=credit_account,
+            account_code=bank_account,
             amount=amount,
         ))
-        # Expense/revenue split (debit_account)
+        # Expense/revenue split: net amount (opposite sign)
         splits.append(JournalEntrySplit(
-            account_code=debit_account,
+            account_code=counter_account,
             amount=-vat_split.net_amount,
         ))
         # VAT split
@@ -65,11 +77,11 @@ def build_journal_entry(
     else:
         # No VAT: simple two-way split
         splits.append(JournalEntrySplit(
-            account_code=credit_account,
+            account_code=bank_account,
             amount=amount,
         ))
         splits.append(JournalEntrySplit(
-            account_code=debit_account,
+            account_code=counter_account,
             amount=-amount,
         ))
 
