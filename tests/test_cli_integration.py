@@ -61,9 +61,9 @@ class TestArgumentParsing:
         assert args.no_gui is True
 
     def test_report_subcommand_parses(self) -> None:
-        args = self.parser.parse_args(["report", "moms", "2025"])
+        args = self.parser.parse_args(["report", "vat", "2025"])
         assert args.command == "report"
-        assert args.type == "moms"
+        assert args.type == "vat"
         assert args.year == 2025
 
     def test_report_all_type(self) -> None:
@@ -71,13 +71,13 @@ class TestArgumentParsing:
         assert args.type == "all"
 
     def test_report_year_is_int(self) -> None:
-        args = self.parser.parse_args(["report", "moms", "2025"])
+        args = self.parser.parse_args(["report", "vat", "2025"])
         assert args.year == 2025
         assert isinstance(args.year, int)
 
     def test_report_invalid_year_raises(self) -> None:
         with pytest.raises(SystemExit):
-            self.parser.parse_args(["report", "moms", "notayear"])
+            self.parser.parse_args(["report", "vat", "notayear"])
 
     def test_report_invalid_type_raises(self) -> None:
         with pytest.raises(SystemExit):

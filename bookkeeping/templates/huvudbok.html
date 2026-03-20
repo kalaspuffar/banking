@@ -55,19 +55,19 @@
             </tr>
             {% for txn in account.transactions %}
             <tr>
-                <td>{{ txn.datum.strftime('%Y-%m-%d') }}</td>
-                <td>{{ txn.verifikation }}</td>
+                <td>{{ txn.date.strftime('%Y-%m-%d') }}</td>
+                <td>{{ txn.verification }}</td>
                 <td>{{ txn.text }}</td>
-                <td class="amount">{% if txn.debet %}{{ txn.debet|sek }}{% endif %}</td>
-                <td class="amount">{% if txn.kredit %}{{ txn.kredit|sek }}{% endif %}</td>
+                <td class="amount">{% if txn.debit %}{{ txn.debit|sek }}{% endif %}</td>
+                <td class="amount">{% if txn.credit %}{{ txn.credit|sek }}{% endif %}</td>
             </tr>
             {% endfor %}
         </tbody>
         <tfoot>
             <tr class="totals">
                 <td colspan="3"><strong>Subtotal</strong></td>
-                <td class="amount">{{ account.subtotal_debet|sek }}</td>
-                <td class="amount">{{ account.subtotal_kredit|sek }}</td>
+                <td class="amount">{{ account.subtotal_debit|sek }}</td>
+                <td class="amount">{{ account.subtotal_credit|sek }}</td>
             </tr>
             <tr class="balance-row">
                 <td colspan="3"><em>Utgående balans</em></td>

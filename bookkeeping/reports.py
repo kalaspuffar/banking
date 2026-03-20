@@ -32,13 +32,14 @@ from bookkeeping.models import CompanyInfo
 # Constants
 # ---------------------------------------------------------------------------
 
-VALID_REPORT_TYPES = ("moms", "ne", "grundbok", "huvudbok")
+VALID_REPORT_TYPES = ("vat", "ne", "journal", "ledger")
 
 ZERO = Decimal("0.00")
 
-# SKV 4700 ruta mapping: ruta number → list of account codes
-# Each entry maps a ruta to the accounts whose totals feed it.
-MOMS_RUTA_ACCOUNTS: dict[str, list[int]] = {
+# SKV 4700 box mapping: box number → list of account codes.
+# Each entry maps a Skatteverket form box (ruta) to the accounts whose
+# totals feed it.
+VAT_BOX_ACCOUNTS: dict[str, list[int]] = {
     "05": [3010],       # Momspliktig försäljning 25%
     "06": [3011],       # Momspliktig försäljning 12%
     "07": [3012],       # Momspliktig försäljning 6%
@@ -49,7 +50,7 @@ MOMS_RUTA_ACCOUNTS: dict[str, list[int]] = {
     "48": [2640],       # Ingående moms
 }
 
-MOMS_RUTA_DESCRIPTIONS: dict[str, str] = {
+VAT_BOX_DESCRIPTIONS: dict[str, str] = {
     "05": "Momspliktig försäljning exkl. moms (25%)",
     "06": "Momspliktig försäljning exkl. moms (12%)",
     "07": "Momspliktig försäljning exkl. moms (6%)",
@@ -61,10 +62,10 @@ MOMS_RUTA_DESCRIPTIONS: dict[str, str] = {
     "49": "Moms att betala eller få tillbaka",
 }
 
-# INK1 NE-bilaga ruta mapping: ruta → (type, account ranges)
+# INK1 NE-bilaga box mapping: box → (type, account ranges).
 # type is "prefix" for account prefix match, "range" for range match,
 # "exact" for single account, or "computed" for derived values.
-NE_RUTA_CONFIG: dict[str, dict[str, Any]] = {
+NE_BOX_CONFIG: dict[str, dict[str, Any]] = {
     "R1": {"type": "prefix", "prefixes": [30], "description": "Nettoomsättning"},
     "R2": {
         "type": "range",
@@ -106,7 +107,7 @@ def generate_report(
     """Generate a PDF report for the given fiscal year.
 
     Args:
-        report_type: One of "moms", "ne", "grundbok", "huvudbok".
+        report_type: One of "vat", "ne", "journal", "ledger".
             Note: "all" is not handled here — it should be handled by the CLI
             caller by looping over all four individual types.
         gnucash_book_path: Path to the GnuCash SQLite book file.
@@ -127,17 +128,17 @@ def generate_report(
         )
 
     dispatcher = {
-        "moms": prepare_moms_data,
+        "vat": prepare_vat_data,
         "ne": prepare_ne_data,
-        "grundbok": prepare_grundbok_data,
-        "huvudbok": prepare_huvudbok_data,
+        "journal": prepare_journal_data,
+        "ledger": prepare_ledger_data,
     }
 
     template_names = {
-        "moms": "momsdeklaration.html",
+        "vat": "momsdeklaration.html",
         "ne": "ne_bilaga.html",
-        "grundbok": "grundbok.html",
-        "huvudbok": "huvudbok.html",
+        "journal": "grundbok.html",
+        "ledger": "huvudbok.html",
     }
 
     prepare_fn = dispatcher[report_type]
@@ -273,14 +274,14 @@ def round_ore(amount: Decimal) -> Decimal:
 
 
 # ---------------------------------------------------------------------------
-# Momsdeklaration data preparation
+# VAT return (momsdeklaration) data preparation
 # ---------------------------------------------------------------------------
 
 
-def prepare_moms_data(
+def prepare_vat_data(
     gnucash_book_path: Path, fiscal_year: int
 ) -> dict[str, Any]:
-    """Query GnuCash and return momsdeklaration ruta→amount mapping.
+    """Query GnuCash and return VAT return box→amount mapping.
 
     Revenue accounts (30xx) store credits as negative in GnuCash, so
     we negate them to display as positive amounts on the form. VAT output
@@ -298,30 +299,30 @@ def prepare_moms_data(
             fiscal_year,
         )
 
-    rutor: dict[str, Decimal] = {}
-    for ruta, accounts in MOMS_RUTA_ACCOUNTS.items():
+    boxes: dict[str, Decimal] = {}
+    for box, accounts in VAT_BOX_ACCOUNTS.items():
         raw = sum_by_exact_accounts(account_totals, accounts)
         # Revenue and output VAT accounts are credit accounts in GnuCash
         # (stored as negative). Negate to show positive on the form.
-        # Input VAT (ruta 48, account 2640) is a debit account (positive).
-        if ruta in ("05", "06", "07", "08", "10", "11", "12"):
-            rutor[ruta] = round_ore(-raw)
+        # Input VAT (box 48, account 2640) is a debit account (positive).
+        if box in ("05", "06", "07", "08", "10", "11", "12"):
+            boxes[box] = round_ore(-raw)
         else:
-            rutor[ruta] = round_ore(raw)
+            boxes[box] = round_ore(raw)
 
-    # Ruta 49: output VAT minus input VAT
+    # Box 49: output VAT minus input VAT
     output_vat = (
-        rutor.get("10", ZERO) + rutor.get("11", ZERO) + rutor.get("12", ZERO)
+        boxes.get("10", ZERO) + boxes.get("11", ZERO) + boxes.get("12", ZERO)
     )
-    input_vat = rutor.get("48", ZERO)
-    rutor["49"] = round_ore(output_vat - input_vat)
+    input_vat = boxes.get("48", ZERO)
+    boxes["49"] = round_ore(output_vat - input_vat)
 
-    ruta_rows = []
-    for ruta_num in ["05", "06", "07", "08", "10", "11", "12", "48", "49"]:
-        amount = rutor.get(ruta_num, ZERO)
-        ruta_rows.append({
-            "ruta": ruta_num,
-            "description": MOMS_RUTA_DESCRIPTIONS[ruta_num],
+    box_rows = []
+    for box_num in ["05", "06", "07", "08", "10", "11", "12", "48", "49"]:
+        amount = boxes.get(box_num, ZERO)
+        box_rows.append({
+            "box": box_num,
+            "description": VAT_BOX_DESCRIPTIONS[box_num],
             "amount": amount,
         })
 
@@ -329,8 +330,8 @@ def prepare_moms_data(
         "report_title": "Momsdeklaration",
         "reference": "SKV 4700",
         "fiscal_year": fiscal_year,
-        "ruta_rows": ruta_rows,
-        "rutor": rutor,
+        "box_rows": box_rows,
+        "boxes": boxes,
     }
 
 
@@ -363,7 +364,7 @@ def _compute_account_balance_at_date(
 def prepare_ne_data(
     gnucash_book_path: Path, fiscal_year: int
 ) -> dict[str, Any]:
-    """Query GnuCash and return NE-bilaga ruta→amount mapping.
+    """Query GnuCash and return NE-bilaga box→amount mapping.
 
     Revenue accounts (30xx) are credit accounts in GnuCash (negative values).
     Cost accounts (50xx-69xx, 79xx) are debit accounts (positive values).
@@ -382,82 +383,82 @@ def prepare_ne_data(
                 fiscal_year,
             )
 
-        rutor: dict[str, Decimal] = {}
+        boxes: dict[str, Decimal] = {}
 
-        for ruta, config in NE_RUTA_CONFIG.items():
-            ruta_type = config["type"]
+        for box, config in NE_BOX_CONFIG.items():
+            box_type = config["type"]
 
-            if ruta_type == "prefix":
+            if box_type == "prefix":
                 raw = sum_by_prefix(account_totals, config["prefixes"])
                 # Revenue accounts are negative in GnuCash; negate for display
-                rutor[ruta] = round_ore(-raw)
+                boxes[box] = round_ore(-raw)
 
-            elif ruta_type == "range":
+            elif box_type == "range":
                 raw = sum_by_range(account_totals, config["ranges"])
                 # Cost accounts are positive in GnuCash; keep as-is
-                rutor[ruta] = round_ore(raw)
+                boxes[box] = round_ore(raw)
 
-            elif ruta_type == "opening_balance":
+            elif box_type == "opening_balance":
                 # Balance at the day before fiscal year start
                 day_before_start = date(fiscal_year - 1, 12, 31)
                 balance = _compute_account_balance_at_date(
                     book, config["account"], day_before_start
                 )
                 # Equity account 2010 is credit (negative in GnuCash); negate
-                rutor[ruta] = round_ore(-balance)
+                boxes[box] = round_ore(-balance)
 
-            elif ruta_type == "closing_balance":
+            elif box_type == "closing_balance":
                 balance = _compute_account_balance_at_date(
                     book, config["account"], end_date
                 )
-                rutor[ruta] = round_ore(-balance)
+                boxes[box] = round_ore(-balance)
 
         # R7 = R1 + R2 - R5 - R6
-        rutor["R7"] = round_ore(
-            rutor.get("R1", ZERO)
-            + rutor.get("R2", ZERO)
-            - rutor.get("R5", ZERO)
-            - rutor.get("R6", ZERO)
+        boxes["R7"] = round_ore(
+            boxes.get("R1", ZERO)
+            + boxes.get("R2", ZERO)
+            - boxes.get("R5", ZERO)
+            - boxes.get("R6", ZERO)
         )
 
-    resultat_rows = []
-    for ruta in ["R1", "R2", "R5", "R6", "R7"]:
-        resultat_rows.append({
-            "ruta": ruta,
-            "description": NE_RUTA_CONFIG[ruta]["description"],
-            "amount": rutor.get(ruta, ZERO),
+    income_rows = []
+    for box in ["R1", "R2", "R5", "R6", "R7"]:
+        income_rows.append({
+            "box": box,
+            "description": NE_BOX_CONFIG[box]["description"],
+            "amount": boxes.get(box, ZERO),
         })
 
-    balans_rows = []
-    for ruta in ["B1", "B4"]:
-        balans_rows.append({
-            "ruta": ruta,
-            "description": NE_RUTA_CONFIG[ruta]["description"],
-            "amount": rutor.get(ruta, ZERO),
+    balance_rows = []
+    for box in ["B1", "B4"]:
+        balance_rows.append({
+            "box": box,
+            "description": NE_BOX_CONFIG[box]["description"],
+            "amount": boxes.get(box, ZERO),
         })
 
     return {
         "report_title": "NE-bilaga",
         "reference": "INK1 NE-bilaga",
         "fiscal_year": fiscal_year,
-        "resultat_rows": resultat_rows,
-        "balans_rows": balans_rows,
-        "rutor": rutor,
+        "income_rows": income_rows,
+        "balance_rows": balance_rows,
+        "boxes": boxes,
     }
 
 
 # ---------------------------------------------------------------------------
-# Grundbok data preparation
+# Journal (grundbok) data preparation
 # ---------------------------------------------------------------------------
 
 
-def prepare_grundbok_data(
+def prepare_journal_data(
     gnucash_book_path: Path, fiscal_year: int
 ) -> dict[str, Any]:
     """Query GnuCash and return chronological journal data.
 
     Flattens transactions to split-level rows sorted by date and
-    verification number, then computes grand totals for debet/kredit.
+    verification number, then computes grand totals for debit/credit.
     """
     start_date, end_date = _get_fiscal_year_dates(fiscal_year)
 
@@ -471,52 +472,52 @@ def prepare_grundbok_data(
 
             for split in transaction.splits:
                 amount = Decimal(str(split.value))
-                debet = round_ore(amount) if amount > ZERO else ZERO
-                kredit = round_ore(-amount) if amount < ZERO else ZERO
+                debit = round_ore(amount) if amount > ZERO else ZERO
+                credit = round_ore(-amount) if amount < ZERO else ZERO
 
                 rows.append({
-                    "verifikation": transaction.num or "",
-                    "datum": post_date,
+                    "verification": transaction.num or "",
+                    "date": post_date,
                     "text": transaction.description or "",
-                    "konto_code": split.account.code or "",
-                    "konto_name": split.account.name or "",
-                    "debet": debet,
-                    "kredit": kredit,
+                    "account_code": split.account.code or "",
+                    "account_name": split.account.name or "",
+                    "debit": debit,
+                    "credit": credit,
                 })
 
     if not rows:
         logger.warning(
             "No transactions found for fiscal year %d. "
-            "The grundbok report will be empty.",
+            "The journal report will be empty.",
             fiscal_year,
         )
 
-    # Sort by date, then by verification number
+    # Sort by date, then by verification number.
     # Known limitation: page-level subtotals are not implemented. The spec
     # mentions "page totals and grand totals", but page totals require
     # WeasyPrint CSS paged media features that are non-trivial to implement.
     # For a small enskild firma (~200-400 transactions/year), grand totals
     # alone are sufficient.
-    rows.sort(key=lambda r: (r["datum"], r["verifikation"]))
+    rows.sort(key=lambda r: (r["date"], r["verification"]))
 
-    grand_total_debet = sum((r["debet"] for r in rows), ZERO)
-    grand_total_kredit = sum((r["kredit"] for r in rows), ZERO)
+    grand_total_debit = sum((r["debit"] for r in rows), ZERO)
+    grand_total_credit = sum((r["credit"] for r in rows), ZERO)
 
     return {
         "report_title": "Grundbok",
         "fiscal_year": fiscal_year,
         "rows": rows,
-        "grand_total_debet": round_ore(grand_total_debet),
-        "grand_total_kredit": round_ore(grand_total_kredit),
+        "grand_total_debit": round_ore(grand_total_debit),
+        "grand_total_credit": round_ore(grand_total_credit),
     }
 
 
 # ---------------------------------------------------------------------------
-# Huvudbok data preparation
+# Ledger (huvudbok) data preparation
 # ---------------------------------------------------------------------------
 
 
-def prepare_huvudbok_data(
+def prepare_ledger_data(
     gnucash_book_path: Path, fiscal_year: int
 ) -> dict[str, Any]:
     """Query GnuCash and return per-account ledger data.
@@ -555,8 +556,8 @@ def prepare_huvudbok_data(
                         "name": split.account.name or "",
                         "opening_balance": ZERO,
                         "transactions": [],
-                        "subtotal_debet": ZERO,
-                        "subtotal_kredit": ZERO,
+                        "subtotal_debit": ZERO,
+                        "subtotal_credit": ZERO,
                     }
 
                 amount = Decimal(str(split.value))
@@ -565,18 +566,18 @@ def prepare_huvudbok_data(
                     # Contributes to opening balance
                     account_data[code]["opening_balance"] += amount
                 elif start_date <= post_date <= end_date:
-                    debet = round_ore(amount) if amount > ZERO else ZERO
-                    kredit = round_ore(-amount) if amount < ZERO else ZERO
+                    debit = round_ore(amount) if amount > ZERO else ZERO
+                    credit = round_ore(-amount) if amount < ZERO else ZERO
 
                     account_data[code]["transactions"].append({
-                        "datum": post_date,
-                        "verifikation": transaction.num or "",
+                        "date": post_date,
+                        "verification": transaction.num or "",
                         "text": transaction.description or "",
-                        "debet": debet,
-                        "kredit": kredit,
+                        "debit": debit,
+                        "credit": credit,
                     })
-                    account_data[code]["subtotal_debet"] += debet
-                    account_data[code]["subtotal_kredit"] += kredit
+                    account_data[code]["subtotal_debit"] += debit
+                    account_data[code]["subtotal_credit"] += credit
 
     # Only keep accounts that have fiscal-year activity
     active_accounts = {
@@ -588,20 +589,20 @@ def prepare_huvudbok_data(
     # Compute closing balances and round
     for data in active_accounts.values():
         data["opening_balance"] = round_ore(data["opening_balance"])
-        data["subtotal_debet"] = round_ore(data["subtotal_debet"])
-        data["subtotal_kredit"] = round_ore(data["subtotal_kredit"])
+        data["subtotal_debit"] = round_ore(data["subtotal_debit"])
+        data["subtotal_credit"] = round_ore(data["subtotal_credit"])
         data["closing_balance"] = round_ore(
             data["opening_balance"]
-            + data["subtotal_debet"]
-            - data["subtotal_kredit"]
+            + data["subtotal_debit"]
+            - data["subtotal_credit"]
         )
         # Sort transactions within account by date
-        data["transactions"].sort(key=lambda t: (t["datum"], t["verifikation"]))
+        data["transactions"].sort(key=lambda t: (t["date"], t["verification"]))
 
     if not active_accounts:
         logger.warning(
             "No accounts with activity found for fiscal year %d. "
-            "The huvudbok report will be empty.",
+            "The ledger report will be empty.",
             fiscal_year,
         )
 

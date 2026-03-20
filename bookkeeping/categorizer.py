@@ -34,8 +34,8 @@ from bookkeeping.rules_db import RulesDatabase
 _DATE_SUFFIX_RE = re.compile(r"/\d{2}-\d{2}-\d{2}$")
 
 # VAT account mapping by rate and transaction direction.
-# Negative amounts are expenses (ingående moms 2640),
-# positive amounts are income (utgående moms 2610).
+# Negative amounts are expenses → input VAT (ingående moms, 2640),
+# positive amounts are income → output VAT (utgående moms, 2610).
 _VAT_ACCOUNTS: dict[Decimal, dict[str, int]] = {
     Decimal("0.25"): {"expense": 2640, "income": 2610},
     Decimal("0.12"): {"expense": 2640, "income": 2620},

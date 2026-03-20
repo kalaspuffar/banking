@@ -1,7 +1,7 @@
 """Tests for the PDF report generation module.
 
 Creates a GnuCash test book with known transactions across multiple BAS
-accounts, then verifies that each report type produces correct ruta values,
+accounts, then verifies that each report type produces correct box values,
 balanced totals, and valid PDF output.
 """
 
@@ -19,9 +19,9 @@ from bookkeeping.reports import (
     VALID_REPORT_TYPES,
     aggregate_by_account,
     generate_report,
-    prepare_grundbok_data,
-    prepare_huvudbok_data,
-    prepare_moms_data,
+    prepare_journal_data,
+    prepare_ledger_data,
+    prepare_vat_data,
     prepare_ne_data,
     round_ore,
     sum_by_exact_accounts,
@@ -148,7 +148,7 @@ def gnucash_book(tmp_path: Path) -> Path:
         ],
     )
 
-    # --- FY 2025 Transaction 1: Consulting invoice 10,000 SEK (25% moms) ---
+    # --- FY 2025 Transaction 1: Consulting invoice 10,000 SEK (25% VAT) ---
     piecash.Transaction(
         currency=sek,
         description="Konsultarvode Kund AB",
@@ -161,7 +161,7 @@ def gnucash_book(tmp_path: Path) -> Path:
         ],
     )
 
-    # --- FY 2025 Transaction 2: YouTube revenue 6,000 SEK (momsfri) ---
+    # --- FY 2025 Transaction 2: YouTube revenue 6,000 SEK (VAT-free) ---
     piecash.Transaction(
         currency=sek,
         description="YouTube Adsense",
@@ -173,7 +173,7 @@ def gnucash_book(tmp_path: Path) -> Path:
         ],
     )
 
-    # --- FY 2025 Transaction 3: Software license -1,000 SEK (25% moms) ---
+    # --- FY 2025 Transaction 3: Software license -1,000 SEK (25% VAT) ---
     piecash.Transaction(
         currency=sek,
         description="Spotify Premium",
@@ -186,7 +186,7 @@ def gnucash_book(tmp_path: Path) -> Path:
         ],
     )
 
-    # --- FY 2025 Transaction 4: IT service -1,500 SEK (25% moms) ---
+    # --- FY 2025 Transaction 4: IT service -1,500 SEK (25% VAT) ---
     piecash.Transaction(
         currency=sek,
         description="Hosting Hetzner",
@@ -240,183 +240,183 @@ class TestAggregationHelpers:
 
 
 # ---------------------------------------------------------------------------
-# Momsdeklaration tests (Task 7.2)
+# VAT return (momsdeklaration) tests
 # ---------------------------------------------------------------------------
 
 
-class TestMomsdeklaration:
-    """Verify momsdeklaration ruta values match expected totals."""
+class TestVatReturn:
+    """Verify VAT return box values match expected totals."""
 
-    def test_ruta_05_taxable_sales_25(self, gnucash_book: Path) -> None:
-        """Ruta 05: account 3010 has -8000 credit → shows 8000 positive."""
-        data = prepare_moms_data(gnucash_book, 2025)
-        assert data["rutor"]["05"] == Decimal("8000.00")
+    def test_box_05_taxable_sales_25(self, gnucash_book: Path) -> None:
+        """Box 05: account 3010 has -8000 credit → shows 8000 positive."""
+        data = prepare_vat_data(gnucash_book, 2025)
+        assert data["boxes"]["05"] == Decimal("8000.00")
 
-    def test_ruta_08_vat_free_sales(self, gnucash_book: Path) -> None:
-        """Ruta 08: account 3040 has -6000 credit → shows 6000 positive."""
-        data = prepare_moms_data(gnucash_book, 2025)
-        assert data["rutor"]["08"] == Decimal("6000.00")
+    def test_box_08_vat_free_sales(self, gnucash_book: Path) -> None:
+        """Box 08: account 3040 has -6000 credit → shows 6000 positive."""
+        data = prepare_vat_data(gnucash_book, 2025)
+        assert data["boxes"]["08"] == Decimal("6000.00")
 
-    def test_ruta_10_output_vat_25(self, gnucash_book: Path) -> None:
-        """Ruta 10: account 2610 has -2000 credit → shows 2000 positive."""
-        data = prepare_moms_data(gnucash_book, 2025)
-        assert data["rutor"]["10"] == Decimal("2000.00")
+    def test_box_10_output_vat_25(self, gnucash_book: Path) -> None:
+        """Box 10: account 2610 has -2000 credit → shows 2000 positive."""
+        data = prepare_vat_data(gnucash_book, 2025)
+        assert data["boxes"]["10"] == Decimal("2000.00")
 
-    def test_ruta_48_input_vat(self, gnucash_book: Path) -> None:
-        """Ruta 48: account 2640 has 200+300=500 debit → shows 500 positive."""
-        data = prepare_moms_data(gnucash_book, 2025)
-        assert data["rutor"]["48"] == Decimal("500.00")
+    def test_box_48_input_vat(self, gnucash_book: Path) -> None:
+        """Box 48: account 2640 has 200+300=500 debit → shows 500 positive."""
+        data = prepare_vat_data(gnucash_book, 2025)
+        assert data["boxes"]["48"] == Decimal("500.00")
 
-    def test_ruta_49_vat_to_pay(self, gnucash_book: Path) -> None:
-        """Ruta 49: output VAT (2000) minus input VAT (500) = 1500."""
-        data = prepare_moms_data(gnucash_book, 2025)
-        assert data["rutor"]["49"] == Decimal("1500.00")
+    def test_box_49_vat_to_pay(self, gnucash_book: Path) -> None:
+        """Box 49: output VAT (2000) minus input VAT (500) = 1500."""
+        data = prepare_vat_data(gnucash_book, 2025)
+        assert data["boxes"]["49"] == Decimal("1500.00")
 
-    def test_ruta_rows_complete(self, gnucash_book: Path) -> None:
-        """All expected rutor are present in the ruta_rows list."""
-        data = prepare_moms_data(gnucash_book, 2025)
-        ruta_nums = [r["ruta"] for r in data["ruta_rows"]]
-        assert ruta_nums == ["05", "06", "07", "08", "10", "11", "12", "48", "49"]
+    def test_box_rows_complete(self, gnucash_book: Path) -> None:
+        """All expected boxes are present in the box_rows list."""
+        data = prepare_vat_data(gnucash_book, 2025)
+        box_nums = [r["box"] for r in data["box_rows"]]
+        assert box_nums == ["05", "06", "07", "08", "10", "11", "12", "48", "49"]
 
 
 # ---------------------------------------------------------------------------
-# NE-bilaga tests (Task 7.3)
+# NE-bilaga tests
 # ---------------------------------------------------------------------------
 
 
 class TestNEBilaga:
-    """Verify NE-bilaga ruta values match expected totals."""
+    """Verify NE-bilaga box values match expected totals."""
 
     def test_r1_net_revenue(self, gnucash_book: Path) -> None:
         """R1: 30xx accounts total -8000-6000=-14000 → negate → 14000."""
         data = prepare_ne_data(gnucash_book, 2025)
-        assert data["rutor"]["R1"] == Decimal("14000.00")
+        assert data["boxes"]["R1"] == Decimal("14000.00")
 
     def test_r2_other_income(self, gnucash_book: Path) -> None:
         """R2: no 37xx-39xx accounts → 0."""
         data = prepare_ne_data(gnucash_book, 2025)
-        assert data["rutor"]["R2"] == ZERO
+        assert data["boxes"]["R2"] == ZERO
 
     def test_r5_external_costs(self, gnucash_book: Path) -> None:
         """R5: 50xx-69xx accounts: 6212=800 + 6540=1200 = 2000."""
         data = prepare_ne_data(gnucash_book, 2025)
-        assert data["rutor"]["R5"] == Decimal("2000.00")
+        assert data["boxes"]["R5"] == Decimal("2000.00")
 
     def test_r6_other_costs(self, gnucash_book: Path) -> None:
         """R6: no 79xx accounts → 0."""
         data = prepare_ne_data(gnucash_book, 2025)
-        assert data["rutor"]["R6"] == ZERO
+        assert data["boxes"]["R6"] == ZERO
 
     def test_r7_book_result(self, gnucash_book: Path) -> None:
         """R7: R1+R2-R5-R6 = 14000+0-2000-0 = 12000."""
         data = prepare_ne_data(gnucash_book, 2025)
-        assert data["rutor"]["R7"] == Decimal("12000.00")
+        assert data["boxes"]["R7"] == Decimal("12000.00")
 
     def test_b1_opening_equity(self, gnucash_book: Path) -> None:
         """B1: account 2010 balance before 2025 = -50000 → negate → 50000."""
         data = prepare_ne_data(gnucash_book, 2025)
-        assert data["rutor"]["B1"] == Decimal("50000.00")
+        assert data["boxes"]["B1"] == Decimal("50000.00")
 
     def test_b4_closing_equity(self, gnucash_book: Path) -> None:
         """B4: account 2010 balance through 2025 = -50000 (no FY entries) → negate → 50000."""
         data = prepare_ne_data(gnucash_book, 2025)
-        assert data["rutor"]["B4"] == Decimal("50000.00")
+        assert data["boxes"]["B4"] == Decimal("50000.00")
 
 
 # ---------------------------------------------------------------------------
-# Grundbok tests (Task 7.4)
+# Journal (grundbok) tests
 # ---------------------------------------------------------------------------
 
 
-class TestGrundbok:
-    """Verify grundbok grand totals and structure."""
+class TestJournal:
+    """Verify journal grand totals and structure."""
 
     def test_grand_totals_balanced(self, gnucash_book: Path) -> None:
-        """Total debet must equal total kredit (double-entry balanced)."""
-        data = prepare_grundbok_data(gnucash_book, 2025)
-        assert data["grand_total_debet"] == data["grand_total_kredit"]
+        """Total debit must equal total credit (double-entry balanced)."""
+        data = prepare_journal_data(gnucash_book, 2025)
+        assert data["grand_total_debit"] == data["grand_total_credit"]
 
     def test_rows_sorted_by_date(self, gnucash_book: Path) -> None:
         """Rows are sorted chronologically by date."""
-        data = prepare_grundbok_data(gnucash_book, 2025)
-        dates = [r["datum"] for r in data["rows"]]
+        data = prepare_journal_data(gnucash_book, 2025)
+        dates = [r["date"] for r in data["rows"]]
         assert dates == sorted(dates)
 
     def test_all_fiscal_year_transactions_present(self, gnucash_book: Path) -> None:
         """All 4 FY 2025 transactions are present (with multiple splits each)."""
-        data = prepare_grundbok_data(gnucash_book, 2025)
-        verifikations = {r["verifikation"] for r in data["rows"]}
-        assert verifikations == {"V1001", "V1002", "V1003", "V1004"}
+        data = prepare_journal_data(gnucash_book, 2025)
+        verifications = {r["verification"] for r in data["rows"]}
+        assert verifications == {"V1001", "V1002", "V1003", "V1004"}
 
     def test_prior_year_excluded(self, gnucash_book: Path) -> None:
-        """The 2024 opening equity transaction is not in the 2025 grundbok."""
-        data = prepare_grundbok_data(gnucash_book, 2025)
-        verifikations = {r["verifikation"] for r in data["rows"]}
-        assert "V0001" not in verifikations
+        """The 2024 opening equity transaction is not in the 2025 journal."""
+        data = prepare_journal_data(gnucash_book, 2025)
+        verifications = {r["verification"] for r in data["rows"]}
+        assert "V0001" not in verifications
 
     def test_grand_totals_correct(self, gnucash_book: Path) -> None:
-        """Grand totals match the sum of all debet/kredit in the rows."""
-        data = prepare_grundbok_data(gnucash_book, 2025)
-        expected_debet = sum((r["debet"] for r in data["rows"]), ZERO)
-        expected_kredit = sum((r["kredit"] for r in data["rows"]), ZERO)
-        assert data["grand_total_debet"] == expected_debet
-        assert data["grand_total_kredit"] == expected_kredit
+        """Grand totals match the sum of all debit/credit in the rows."""
+        data = prepare_journal_data(gnucash_book, 2025)
+        expected_debit = sum((r["debit"] for r in data["rows"]), ZERO)
+        expected_credit = sum((r["credit"] for r in data["rows"]), ZERO)
+        assert data["grand_total_debit"] == expected_debit
+        assert data["grand_total_credit"] == expected_credit
 
 
 # ---------------------------------------------------------------------------
-# Huvudbok tests (Task 7.5)
+# Ledger (huvudbok) tests
 # ---------------------------------------------------------------------------
 
 
-class TestHuvudbok:
-    """Verify huvudbok account balances and structure."""
+class TestLedger:
+    """Verify ledger account balances and structure."""
 
     def test_accounts_sorted_by_code(self, gnucash_book: Path) -> None:
         """Account sections are sorted by account number ascending."""
-        data = prepare_huvudbok_data(gnucash_book, 2025)
+        data = prepare_ledger_data(gnucash_book, 2025)
         codes = [a["code"] for a in data["accounts"]]
         assert codes == sorted(codes)
 
     def test_opening_plus_activity_equals_closing(self, gnucash_book: Path) -> None:
-        """For each account: opening + debet - kredit = closing."""
-        data = prepare_huvudbok_data(gnucash_book, 2025)
+        """For each account: opening + debit - credit = closing."""
+        data = prepare_ledger_data(gnucash_book, 2025)
         for account in data["accounts"]:
             expected_closing = (
                 account["opening_balance"]
-                + account["subtotal_debet"]
-                - account["subtotal_kredit"]
+                + account["subtotal_debit"]
+                - account["subtotal_credit"]
             )
             assert account["closing_balance"] == expected_closing, (
                 f"Account {account['code']}: "
                 f"opening={account['opening_balance']} + "
-                f"debet={account['subtotal_debet']} - "
-                f"kredit={account['subtotal_kredit']} != "
+                f"debit={account['subtotal_debit']} - "
+                f"credit={account['subtotal_credit']} != "
                 f"closing={account['closing_balance']}"
             )
 
     def test_bank_account_opening_balance(self, gnucash_book: Path) -> None:
         """Account 1930 has opening balance of 50,000 from prior year."""
-        data = prepare_huvudbok_data(gnucash_book, 2025)
+        data = prepare_ledger_data(gnucash_book, 2025)
         bank = next(a for a in data["accounts"] if a["code"] == "1930")
         assert bank["opening_balance"] == Decimal("50000.00")
 
     def test_all_active_accounts_present(self, gnucash_book: Path) -> None:
         """All accounts with FY 2025 activity are represented."""
-        data = prepare_huvudbok_data(gnucash_book, 2025)
+        data = prepare_ledger_data(gnucash_book, 2025)
         codes = {a["code"] for a in data["accounts"]}
         expected = {"1930", "2610", "2640", "3010", "3040", "6212", "6540"}
         assert codes == expected
 
     def test_account_transactions_sorted(self, gnucash_book: Path) -> None:
         """Transactions within each account are sorted by date."""
-        data = prepare_huvudbok_data(gnucash_book, 2025)
+        data = prepare_ledger_data(gnucash_book, 2025)
         for account in data["accounts"]:
-            dates = [t["datum"] for t in account["transactions"]]
+            dates = [t["date"] for t in account["transactions"]]
             assert dates == sorted(dates), f"Account {account['code']} not sorted"
 
 
 # ---------------------------------------------------------------------------
-# PDF generation tests (Task 7.6)
+# PDF generation tests
 # ---------------------------------------------------------------------------
 
 
@@ -451,8 +451,8 @@ class TestPDFGeneration:
         tmp_path: Path,
     ) -> None:
         """Generated file is a valid PDF (starts with %PDF magic bytes)."""
-        output_path = tmp_path / "moms_2025.pdf"
-        generate_report("moms", gnucash_book, 2025, output_path, company_info)
+        output_path = tmp_path / "vat_2025.pdf"
+        generate_report("vat", gnucash_book, 2025, output_path, company_info)
         with open(output_path, "rb") as f:
             header = f.read(5)
         assert header == b"%PDF-"
@@ -481,5 +481,5 @@ class TestPDFGeneration:
     ) -> None:
         """Output directory is created automatically if it doesn't exist."""
         output_path = tmp_path / "subdir" / "deep" / "report.pdf"
-        generate_report("moms", gnucash_book, 2025, output_path, company_info)
+        generate_report("vat", gnucash_book, 2025, output_path, company_info)
         assert output_path.exists()
