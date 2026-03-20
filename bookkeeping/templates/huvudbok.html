@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block title %}Huvudbok {{ fiscal_year }}{% endblock %}
+{% block heading %}Huvudbok{% endblock %}
+
+{% block extra_style %}
+<style>
+    .account-section {
+        page-break-inside: avoid;
+        break-inside: avoid;
+        margin-bottom: 8mm;
+    }
+
+    /* Allow page breaks between account sections */
+    .account-section + .account-section {
+        page-break-before: auto;
+        break-before: auto;
+    }
+
+    .account-header {
+        font-size: 11pt;
+        font-weight: bold;
+        background-color: #e0e0e0;
+        padding: 2mm 3mm;
+        border: 0.5pt solid #999;
+        margin-top: 5mm;
+    }
+
+    .balance-row td {
+        font-style: italic;
+        background-color: #f4f4f4;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+{% for account in accounts %}
+<div class="account-section">
+    <div class="account-header">{{ account.code }} {{ account.name }}</div>
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 14%;">Datum</th>
+                <th style="width: 14%;">Verifikation</th>
+                <th>Text</th>
+                <th class="amount" style="width: 15%;">Debet</th>
+                <th class="amount" style="width: 15%;">Kredit</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr class="balance-row">
+                <td colspan="3"><em>Ingående balans</em></td>
+                <td class="amount">{% if account.opening_balance > 0 %}{{ account.opening_balance|sek }}{% endif %}</td>
+                <td class="amount">{% if account.opening_balance < 0 %}{{ (-account.opening_balance)|sek }}{% endif %}</td>
+            </tr>
+            {% for txn in account.transactions %}
+            <tr>
+                <td>{{ txn.datum.strftime('%Y-%m-%d') }}</td>
+                <td>{{ txn.verifikation }}</td>
+                <td>{{ txn.text }}</td>
+                <td class="amount">{% if txn.debet %}{{ txn.debet|sek }}{% endif %}</td>
+                <td class="amount">{% if txn.kredit %}{{ txn.kredit|sek }}{% endif %}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr class="totals">
+                <td colspan="3"><strong>Subtotal</strong></td>
+                <td class="amount">{{ account.subtotal_debet|sek }}</td>
+                <td class="amount">{{ account.subtotal_kredit|sek }}</td>
+            </tr>
+            <tr class="balance-row">
+                <td colspan="3"><em>Utgående balans</em></td>
+                <td class="amount">{% if account.closing_balance > 0 %}{{ account.closing_balance|sek }}{% endif %}</td>
+                <td class="amount">{% if account.closing_balance < 0 %}{{ (-account.closing_balance)|sek }}{% endif %}</td>
+            </tr>
+        </tfoot>
+    </table>
+</div>
+{% endfor %}
+{% endblock %}
