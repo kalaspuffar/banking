@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block title %}Momsdeklaration {{ fiscal_year }}{% endblock %}
+{% block heading %}Momsdeklaration{% endblock %}
+
+{% block content %}
+<p class="reference">Referens: {{ reference }} — Period: {{ fiscal_year }}-01-01 till {{ fiscal_year }}-12-31</p>
+
+<table>
+    <thead>
+        <tr>
+            <th style="width: 12%;">Ruta</th>
+            <th>Beskrivning</th>
+            <th class="amount" style="width: 25%;">Belopp (SEK)</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in ruta_rows %}
+        <tr{% if row.ruta == '49' %} class="totals"{% endif %}>
+            <td>{{ row.ruta }}</td>
+            <td>{{ row.description }}</td>
+            <td class="amount">{{ row.amount|sek }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

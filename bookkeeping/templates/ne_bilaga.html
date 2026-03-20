@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block title %}NE-bilaga {{ fiscal_year }}{% endblock %}
+{% block heading %}NE-bilaga{% endblock %}
+
+{% block content %}
+<p class="reference">Referens: {{ reference }} — Räkenskapsår {{ fiscal_year }}</p>
+
+<div class="section-header">Resultaträkning</div>
+<table>
+    <thead>
+        <tr>
+            <th style="width: 12%;">Ruta</th>
+            <th>Beskrivning</th>
+            <th class="amount" style="width: 25%;">Belopp (SEK)</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in resultat_rows %}
+        <tr{% if row.ruta == 'R7' %} class="totals"{% endif %}>
+            <td>{{ row.ruta }}</td>
+            <td>{{ row.description }}</td>
+            <td class="amount">{{ row.amount|sek }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<div class="section-header">Balansräkning</div>
+<table>
+    <thead>
+        <tr>
+            <th style="width: 12%;">Ruta</th>
+            <th>Beskrivning</th>
+            <th class="amount" style="width: 25%;">Belopp (SEK)</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in balans_rows %}
+        <tr>
+            <td>{{ row.ruta }}</td>
+            <td>{{ row.description }}</td>
+            <td class="amount">{{ row.amount|sek }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

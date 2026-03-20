@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block title %}Grundbok {{ fiscal_year }}{% endblock %}
+{% block heading %}Grundbok{% endblock %}
+
+{% block content %}
+<table>
+    <thead>
+        <tr>
+            <th style="width: 12%;">Verifikation</th>
+            <th style="width: 12%;">Datum</th>
+            <th>Text</th>
+            <th style="width: 15%;">Konto</th>
+            <th class="amount" style="width: 13%;">Debet</th>
+            <th class="amount" style="width: 13%;">Kredit</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in rows %}
+        <tr>
+            <td>{{ row.verifikation }}</td>
+            <td>{{ row.datum }}</td>
+            <td>{{ row.text }}</td>
+            <td>{{ row.konto_code }} {{ row.konto_name }}</td>
+            <td class="amount">{% if row.debet %}{{ row.debet|sek }}{% endif %}</td>
+            <td class="amount">{% if row.kredit %}{{ row.kredit|sek }}{% endif %}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+    <tfoot>
+        <tr class="totals">
+            <td colspan="4"><strong>Summa</strong></td>
+            <td class="amount">{{ grand_total_debet|sek }}</td>
+            <td class="amount">{{ grand_total_kredit|sek }}</td>
+        </tr>
+    </tfoot>
+</table>
+{% endblock %}

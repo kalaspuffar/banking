@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <title>{% block title %}{{ report_title }}{% endblock %}</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 20mm 15mm 25mm 15mm;
+
+            @top-left {
+                content: "{{ company.name }}";
+                font-family: sans-serif;
+                font-size: 9pt;
+                color: #333;
+            }
+
+            @top-right {
+                content: "Räkenskapsår {{ fiscal_year }}";
+                font-family: sans-serif;
+                font-size: 9pt;
+                color: #333;
+            }
+
+            @bottom-center {
+                content: "Sida " counter(page) " av " counter(pages);
+                font-family: sans-serif;
+                font-size: 8pt;
+                color: #666;
+            }
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: "DejaVu Sans", "Liberation Sans", Arial, sans-serif;
+            font-size: 10pt;
+            line-height: 1.4;
+            color: #000;
+        }
+
+        .header {
+            margin-bottom: 15mm;
+            border-bottom: 1pt solid #000;
+            padding-bottom: 3mm;
+        }
+
+        .header h1 {
+            font-size: 16pt;
+            margin-bottom: 2mm;
+        }
+
+        .header .company-info {
+            font-size: 9pt;
+            color: #333;
+        }
+
+        .header .company-info span {
+            margin-right: 15px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 9pt;
+        }
+
+        th {
+            background-color: #f0f0f0;
+            border: 0.5pt solid #999;
+            padding: 2mm 3mm;
+            text-align: left;
+            font-weight: bold;
+        }
+
+        td {
+            border: 0.5pt solid #ccc;
+            padding: 1.5mm 3mm;
+            vertical-align: top;
+        }
+
+        /* Alternating row shading for readability */
+        tbody tr:nth-child(even) {
+            background-color: #f8f8f8;
+        }
+
+        /* Right-align amount columns */
+        .amount {
+            text-align: right;
+            font-family: "DejaVu Sans Mono", "Liberation Mono", monospace;
+            font-variant-numeric: tabular-nums;
+            white-space: nowrap;
+        }
+
+        .totals td {
+            font-weight: bold;
+            border-top: 1.5pt solid #000;
+            background-color: #f0f0f0;
+        }
+
+        .section-header {
+            font-size: 12pt;
+            font-weight: bold;
+            margin-top: 8mm;
+            margin-bottom: 3mm;
+        }
+
+        .reference {
+            font-size: 8pt;
+            color: #666;
+            margin-top: 5mm;
+        }
+    </style>
+    {% block extra_style %}{% endblock %}
+</head>
+<body>
+    <div class="header">
+        <h1>{% block heading %}{{ report_title }}{% endblock %}</h1>
+        <div class="company-info">
+            <span><strong>{{ company.name }}</strong></span>
+            <span>Org.nr: {{ company.org_number }}</span>
+            <span>{{ company.address }}</span>
+            <span>Räkenskapsår: {{ fiscal_year }}</span>
+        </div>
+    </div>
+
+    {% block content %}{% endblock %}
+</body>
+</html>
