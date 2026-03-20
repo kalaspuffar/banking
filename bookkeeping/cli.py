@@ -428,7 +428,7 @@ def _write_and_log(
                 entry = build_journal_entry(
                     verification_number=txn.verification_number,
                     booking_date=txn.booking_date,
-                    description=txn.text,
+                    description=txn.display_text or txn.text,
                     amount=txn.amount,
                     debit_account=suggestion.debit_account,
                     credit_account=suggestion.credit_account,

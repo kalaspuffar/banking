@@ -146,7 +146,7 @@ if _GTK_AVAILABLE:
             self._suggestion = suggestion
             txn = suggestion.transaction
             self._date_str = txn.booking_date.isoformat()
-            self._text = txn.text
+            self._text = txn.display_text or txn.text
             self._amount = txn.amount
             self._balance = txn.balance
             self._account_code = suggestion.debit_account if suggestion.confidence != "none" else 0
