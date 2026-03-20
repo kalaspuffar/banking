@@ -263,7 +263,7 @@ def _handle_import_gui(
 ) -> None:
     """Launch the GTK4 verification GUI for import."""
     try:
-        from bookkeeping.gtk_app import BokforingApp
+        from bookkeeping.gtk_app import BookkeepingApp
     except ImportError:
         print(
             "Error: GTK4 is not available. Use --no-gui for CLI-only mode.",
@@ -275,7 +275,7 @@ def _handle_import_gui(
     from bookkeeping.gnucash_writer import write_transactions
     from bookkeeping.rules_db import RulesDatabase
 
-    app = BokforingApp()
+    app = BookkeepingApp()
 
     def on_save(entries: list) -> None:
         result = write_transactions(book_path, entries)
@@ -408,10 +408,10 @@ def _handle_report(args: argparse.Namespace) -> None:
 
     for report_type in report_types:
         filename_map = {
-            "moms": f"momsdeklaration_{fiscal_year}.pdf",
+            "vat": f"momsdeklaration_{fiscal_year}.pdf",
             "ne": f"ne_bilaga_{fiscal_year}.pdf",
-            "grundbok": f"grundbok_{fiscal_year}.pdf",
-            "huvudbok": f"huvudbok_{fiscal_year}.pdf",
+            "journal": f"grundbok_{fiscal_year}.pdf",
+            "ledger": f"huvudbok_{fiscal_year}.pdf",
         }
         output_path = output_dir / filename_map[report_type]
         result_path = generate_report(
@@ -593,7 +593,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     report_parser.add_argument(
         "type",
-        choices=["moms", "ne", "grundbok", "huvudbok", "all"],
+        choices=["vat", "ne", "journal", "ledger", "all"],
         help="Report type to generate",
     )
     report_parser.add_argument("year", type=int, help="Fiscal year (e.g. 2025)")

@@ -15,9 +15,9 @@
         </tr>
     </thead>
     <tbody>
-        {% for row in ruta_rows %}
-        <tr{% if row.ruta == '49' %} class="totals"{% endif %}>
-            <td>{{ row.ruta }}</td>
+        {% for row in box_rows %}
+        <tr{% if row.box == '49' %} class="totals"{% endif %}>
+            <td>{{ row.box }}</td>
             <td>{{ row.description }}</td>
             <td class="amount">{{ row.amount|sek }}</td>
         </tr>

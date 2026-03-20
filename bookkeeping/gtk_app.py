@@ -132,8 +132,8 @@ if _GTK_AVAILABLE:
         """GObject wrapper around a CategorizationSuggestion for Gio.ListStore.
 
         Exposes observable properties so GTK4 widgets can bind to individual
-        transaction fields. The ``konto`` and ``moms`` properties are mutable —
-        updated when the user selects a different account.
+        transaction fields. The ``account_code`` and ``vat_rate`` properties
+        are mutable — updated when the user selects a different account.
         """
 
         __gtype_name__ = "TransactionRow"
@@ -145,13 +145,13 @@ if _GTK_AVAILABLE:
             super().__init__()
             self._suggestion = suggestion
             txn = suggestion.transaction
-            self._datum = txn.booking_date.isoformat()
+            self._date_str = txn.booking_date.isoformat()
             self._text = txn.text
-            self._belopp = txn.amount
-            self._saldo = txn.balance
-            self._konto = suggestion.debit_account if suggestion.confidence != "none" else 0
-            self._konto_name = ""
-            self._moms = suggestion.vat_rate
+            self._amount = txn.amount
+            self._balance = txn.balance
+            self._account_code = suggestion.debit_account if suggestion.confidence != "none" else 0
+            self._account_name = ""
+            self._vat_rate = suggestion.vat_rate
             self._is_categorized = suggestion.confidence != "none"
             self._original_confidence = suggestion.confidence
             self._rule_id = suggestion.rule_id
@@ -160,57 +160,57 @@ if _GTK_AVAILABLE:
         # --- Read-only properties ---
 
         @GObject.Property(type=str)
-        def datum(self) -> str:
-            return self._datum
+        def date_str(self) -> str:
+            return self._date_str
 
         @GObject.Property(type=str)
         def text(self) -> str:
             return self._text
 
         @GObject.Property(type=str)
-        def belopp_display(self) -> str:
+        def amount_display(self) -> str:
             """Amount formatted with Swedish decimal comma notation."""
-            return format_amount_swedish(self._belopp)
+            return format_amount_swedish(self._amount)
 
         @GObject.Property(type=str)
-        def saldo_display(self) -> str:
+        def balance_display(self) -> str:
             """Balance formatted with Swedish decimal comma notation."""
-            return format_amount_swedish(self._saldo)
+            return format_amount_swedish(self._balance)
 
         # --- Mutable properties ---
 
         @GObject.Property(type=int)
-        def konto(self) -> int:
-            return self._konto
+        def account_code(self) -> int:
+            return self._account_code
 
-        @konto.setter
-        def konto(self, value: int) -> None:
-            if self._konto != value:
-                self._konto = value
+        @account_code.setter
+        def account_code(self, value: int) -> None:
+            if self._account_code != value:
+                self._account_code = value
                 self._is_categorized = value != 0
-                self.notify("konto")
+                self.notify("account-code")
                 self.notify("is-categorized")
-                self.notify("konto-display")
+                self.notify("account-display")
 
         @GObject.Property(type=str)
-        def konto_name(self) -> str:
-            return self._konto_name
+        def account_name(self) -> str:
+            return self._account_name
 
-        @konto_name.setter
-        def konto_name(self, value: str) -> None:
-            self._konto_name = value
+        @account_name.setter
+        def account_name(self, value: str) -> None:
+            self._account_name = value
 
         @GObject.Property(type=str)
-        def konto_display(self) -> str:
-            """Konto column display: filled square + number or question mark."""
+        def account_display(self) -> str:
+            """Account column display: filled square + number or question mark."""
             if self._is_categorized:
-                return f"\u25a0 {self._konto}"
+                return f"\u25a0 {self._account_code}"
             return "? ----"
 
         @GObject.Property(type=str)
-        def moms_display(self) -> str:
+        def vat_display(self) -> str:
             """VAT rate formatted as percentage string."""
-            pct = int(self._moms * 100)
+            pct = int(self._vat_rate * 100)
             return f"{pct}%"
 
         @GObject.Property(type=bool, default=False)
@@ -229,7 +229,7 @@ if _GTK_AVAILABLE:
 
         @property
         def debit_account(self) -> int:
-            return self._konto
+            return self._account_code
 
         @property
         def credit_account(self) -> int:
@@ -237,7 +237,7 @@ if _GTK_AVAILABLE:
 
         @property
         def vat_rate(self) -> Decimal:
-            return self._moms
+            return self._vat_rate
 
         @property
         def vat_account(self) -> int | None:
@@ -261,8 +261,8 @@ if _GTK_AVAILABLE:
                 vat_rate: The VAT rate for this account.
                 vat_account: The VAT account, or None for 0% VAT.
             """
-            self._konto = account_code
-            self._moms = vat_rate
+            self._account_code = account_code
+            self._vat_rate = vat_rate
             self._is_categorized = account_code != 0
             self._suggestion = CategorizationSuggestion(
                 transaction=self._suggestion.transaction,
@@ -273,10 +273,10 @@ if _GTK_AVAILABLE:
                 confidence="pattern" if self._is_categorized else "none",
                 rule_id=self._rule_id,
             )
-            self.notify("konto")
+            self.notify("account-code")
             self.notify("is-categorized")
-            self.notify("konto-display")
-            self.notify("moms-display")
+            self.notify("account-display")
+            self.notify("vat-display")
 
         def to_journal_entry(self) -> JournalEntry:
             """Convert this row into a balanced JournalEntry.
@@ -295,10 +295,10 @@ if _GTK_AVAILABLE:
                 verification_number=self._verification_number,
                 booking_date=self.transaction.booking_date,
                 description=self._text,
-                amount=self._belopp,
-                debit_account=self._konto,
+                amount=self._amount,
+                debit_account=self._account_code,
                 credit_account=self.credit_account,
-                vat_rate=self._moms,
+                vat_rate=self._vat_rate,
                 vat_account=self.vat_account,
             )
 
@@ -560,18 +560,18 @@ if _GTK_AVAILABLE:
             self._column_view.set_show_row_separators(True)
             scrolled.set_child(self._column_view)
 
-            self._add_column("Datum", self._setup_label, self._bind_datum, 100)
+            self._add_column("Datum", self._setup_label, self._bind_date, 100)
             self._add_column("Text", self._setup_text, self._bind_text, 300)
             self._add_column(
-                "Belopp", self._setup_amount, self._bind_belopp, 100
+                "Belopp", self._setup_amount, self._bind_amount, 100
             )
             self._add_column(
-                "Konto", self._setup_konto, self._bind_konto, 120,
-                unbind_fn=self._unbind_konto,
+                "Konto", self._setup_account_button, self._bind_account, 120,
+                unbind_fn=self._unbind_account,
             )
-            self._add_column("Moms", self._setup_center, self._bind_moms, 60)
+            self._add_column("Moms", self._setup_center, self._bind_vat, 60)
             self._add_column(
-                "Saldo", self._setup_amount, self._bind_saldo, 120
+                "Saldo", self._setup_amount, self._bind_balance, 120
             )
 
         def _add_column(
@@ -616,17 +616,17 @@ if _GTK_AVAILABLE:
             label.set_halign(Gtk.Align.CENTER)
             list_item.set_child(label)
 
-        def _setup_konto(self, factory, list_item):
+        def _setup_account_button(self, factory, list_item):
             button = Gtk.Button()
             button.set_halign(Gtk.Align.START)
             list_item.set_child(button)
 
         # --- Factory bind methods ---
 
-        def _bind_datum(self, factory, list_item):
+        def _bind_date(self, factory, list_item):
             row: TransactionRow = list_item.get_item()
             label: Gtk.Label = list_item.get_child()
-            label.set_text(row.datum)
+            label.set_text(row.date_str)
             self._apply_row_styling(label, row)
 
         def _bind_text(self, factory, list_item):
@@ -635,41 +635,41 @@ if _GTK_AVAILABLE:
             label.set_text(row.text)
             self._apply_row_styling(label, row)
 
-        def _bind_belopp(self, factory, list_item):
+        def _bind_amount(self, factory, list_item):
             row: TransactionRow = list_item.get_item()
             label: Gtk.Label = list_item.get_child()
-            label.set_text(row.belopp_display)
+            label.set_text(row.amount_display)
             self._apply_row_styling(label, row)
 
-        def _bind_konto(self, factory, list_item):
+        def _bind_account(self, factory, list_item):
             row: TransactionRow = list_item.get_item()
             button: Gtk.Button = list_item.get_child()
-            button.set_label(row.konto_display)
+            button.set_label(row.account_display)
             # Disconnect any previous handler to prevent stacking on recycled items
-            if hasattr(list_item, "_konto_handler_id") and list_item._konto_handler_id:
-                button.disconnect(list_item._konto_handler_id)
-            list_item._konto_handler_id = button.connect(
-                "clicked", self._on_konto_clicked, row
+            if hasattr(list_item, "_account_handler_id") and list_item._account_handler_id:
+                button.disconnect(list_item._account_handler_id)
+            list_item._account_handler_id = button.connect(
+                "clicked", self._on_account_clicked, row
             )
             self._apply_row_styling(button, row)
 
-        def _unbind_konto(self, factory, list_item):
-            """Disconnect the konto button signal handler on unbind."""
+        def _unbind_account(self, factory, list_item):
+            """Disconnect the account button signal handler on unbind."""
             button: Gtk.Button = list_item.get_child()
-            if hasattr(list_item, "_konto_handler_id") and list_item._konto_handler_id:
-                button.disconnect(list_item._konto_handler_id)
-                list_item._konto_handler_id = None
+            if hasattr(list_item, "_account_handler_id") and list_item._account_handler_id:
+                button.disconnect(list_item._account_handler_id)
+                list_item._account_handler_id = None
 
-        def _bind_moms(self, factory, list_item):
+        def _bind_vat(self, factory, list_item):
             row: TransactionRow = list_item.get_item()
             label: Gtk.Label = list_item.get_child()
-            label.set_text(row.moms_display)
+            label.set_text(row.vat_display)
             self._apply_row_styling(label, row)
 
-        def _bind_saldo(self, factory, list_item):
+        def _bind_balance(self, factory, list_item):
             row: TransactionRow = list_item.get_item()
             label: Gtk.Label = list_item.get_child()
-            label.set_text(row.saldo_display)
+            label.set_text(row.balance_display)
             self._apply_row_styling(label, row)
 
         # --- Row styling ---
@@ -683,7 +683,7 @@ if _GTK_AVAILABLE:
 
         # --- Account selector popover ---
 
-        def _on_konto_clicked(self, button, row: TransactionRow) -> None:
+        def _on_account_clicked(self, button, row: TransactionRow) -> None:
             """Show the account selector popover."""
             popover = Gtk.Popover()
             popover.set_parent(button)
@@ -863,7 +863,7 @@ if _GTK_AVAILABLE:
             except GLib.Error:
                 pass
 
-    class BokforingApp(Gtk.Application):
+    class BookkeepingApp(Gtk.Application):
         """GTK4 application for transaction verification and categorization.
 
         Receives pre-processed data (suggestions, accounts, counts) and
@@ -873,7 +873,7 @@ if _GTK_AVAILABLE:
 
         def __init__(self) -> None:
             super().__init__(
-                application_id="se.bokforing.verification",
+                application_id="se.bookkeeping.verification",
                 flags=Gio.ApplicationFlags.FLAGS_NONE,
             )
             self._suggestions: list[CategorizationSuggestion] = []

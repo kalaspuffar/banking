@@ -374,12 +374,12 @@ class TestTransactionRowGObject:
 
         row = TransactionRow(categorized_suggestion)
 
-        assert row.datum == "2026-01-28"
+        assert row.date_str == "2026-01-28"
         assert row.text == "Spotify"
         assert row.is_categorized is True
-        assert row.konto == 6540
-        assert row.konto_display == "\u25a0 6540"
-        assert row.moms_display == "25%"
+        assert row.account_code == 6540
+        assert row.account_display == "\u25a0 6540"
+        assert row.vat_display == "25%"
 
     def test_uncategorized_row_properties(self, uncategorized_suggestion):
         _skip_if_no_gtk()
@@ -387,12 +387,12 @@ class TestTransactionRowGObject:
 
         row = TransactionRow(uncategorized_suggestion)
 
-        assert row.datum == "2026-02-01"
+        assert row.date_str == "2026-02-01"
         assert row.text == "Bankavgift"
         assert row.is_categorized is False
-        assert row.konto == 0
-        assert row.konto_display == "? ----"
-        assert row.moms_display == "0%"
+        assert row.account_code == 0
+        assert row.account_display == "? ----"
+        assert row.vat_display == "0%"
 
     def test_set_account_updates_row(self, uncategorized_suggestion):
         _skip_if_no_gtk()
@@ -404,16 +404,16 @@ class TestTransactionRowGObject:
         row.set_account(6570, Decimal("0.00"), None)
 
         assert row.is_categorized is True
-        assert row.konto == 6570
-        assert row.konto_display == "\u25a0 6570"
+        assert row.account_code == 6570
+        assert row.account_display == "\u25a0 6570"
         assert row.debit_account == 6570
 
-    def test_saldo_display(self, categorized_suggestion):
+    def test_balance_display(self, categorized_suggestion):
         _skip_if_no_gtk()
         from bookkeeping.gtk_app import TransactionRow
 
         row = TransactionRow(categorized_suggestion)
-        assert row.saldo_display == "10 000,00"
+        assert row.balance_display == "10 000,00"
 
     def test_to_journal_entry(self, categorized_suggestion):
         _skip_if_no_gtk()
