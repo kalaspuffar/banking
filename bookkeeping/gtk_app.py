@@ -24,8 +24,10 @@ from typing import Callable
 from bookkeeping.models import (
     BankTransaction,
     CategorizationSuggestion,
+    GnuCashError,
     JournalEntry,
     JournalEntrySplit,
+    RulesDBError,
 )
 from bookkeeping.vat import apply_vat_split
 
@@ -37,7 +39,7 @@ try:
     import gi
 
     gi.require_version("Gtk", "4.0")
-    from gi.repository import Gio, GLib, GObject, Gtk
+    from gi.repository import Gio, GLib, GObject, Gtk, Pango
 
     _GTK_AVAILABLE = True
 except (ImportError, ValueError) as exc:
@@ -403,15 +405,50 @@ if _GTK_AVAILABLE:
         def vat_rate(self) -> Decimal:
             return self._vat_rate
 
-    def load_accounts_from_gnucash(gnucash_book_path: str) -> list[AccountItem]:
+    # Default VAT rates for common BAS 2023 account ranges.
+    # Keys are account code prefixes; values are the VAT rate as Decimal.
+    _DEFAULT_VAT_RATES: dict[str, Decimal] = {
+        "3010": Decimal("0.25"),   # Försäljning tjänster 25%
+        "3011": Decimal("0.12"),   # Försäljning tjänster 12%
+        "3012": Decimal("0.06"),   # Försäljning tjänster 6%
+        "6212": Decimal("0.25"),   # Programvarulicenser
+        "6540": Decimal("0.25"),   # IT-tjänster
+    }
+
+    def _lookup_default_vat_rate(code: int) -> Decimal:
+        """Look up the default VAT rate for a BAS account code.
+
+        Checks the account code against known VAT rate mappings. Returns
+        Decimal("0.00") if no specific rate is known.
+
+        Args:
+            code: The BAS account number.
+
+        Returns:
+            The VAT rate as a Decimal fraction.
+        """
+        code_str = str(code)
+        if code_str in _DEFAULT_VAT_RATES:
+            return _DEFAULT_VAT_RATES[code_str]
+        return Decimal("0.00")
+
+    def load_accounts_from_gnucash(
+        gnucash_book_path: str,
+        vat_rates: dict[int, Decimal] | None = None,
+    ) -> list[AccountItem]:
         """Load BAS 2023 accounts from a GnuCash book as AccountItem objects.
 
         Reads account code and name pairs from the GnuCash book and wraps
         them in AccountItem objects for the account selector. Only accounts
         with a non-empty numeric code are included.
 
+        VAT rates are assigned from the ``vat_rates`` mapping if provided,
+        otherwise from built-in defaults for common BAS accounts.
+
         Args:
             gnucash_book_path: Path to the GnuCash SQLite book file.
+            vat_rates: Optional mapping of account code to VAT rate. When
+                provided, overrides built-in defaults.
 
         Returns:
             List of AccountItem objects sorted by account code.
@@ -420,8 +457,6 @@ if _GTK_AVAILABLE:
             GnuCashError: If the book cannot be opened.
         """
         from pathlib import Path
-
-        from bookkeeping.models import GnuCashError
 
         book_path = Path(gnucash_book_path)
         if not book_path.exists():
@@ -438,9 +473,14 @@ if _GTK_AVAILABLE:
                             code = int(account.code.strip())
                         except ValueError:
                             continue
+                        if vat_rates and code in vat_rates:
+                            rate = vat_rates[code]
+                        else:
+                            rate = _lookup_default_vat_rate(code)
                         items.append(AccountItem(
                             code=code,
                             name=account.name,
+                            vat_rate=rate,
                         ))
                 items.sort(key=lambda a: a.code)
                 return items
@@ -498,7 +538,7 @@ if _GTK_AVAILABLE:
         ) -> None:
             super().__init__(
                 application=app,
-                title="Bokforing - Import & Kategorisering",
+                title="Bokföring - Import & Kategorisering",
             )
             self.set_default_size(1000, 700)
 
@@ -600,7 +640,8 @@ if _GTK_AVAILABLE:
                 "Belopp", self._setup_amount, self._bind_belopp, 100
             )
             self._add_column(
-                "Konto", self._setup_konto, self._bind_konto, 120
+                "Konto", self._setup_konto, self._bind_konto, 120,
+                unbind_fn=self._unbind_konto,
             )
             self._add_column("Moms", self._setup_center, self._bind_moms, 60)
             self._add_column(
@@ -613,11 +654,14 @@ if _GTK_AVAILABLE:
             setup_fn: Callable,
             bind_fn: Callable,
             fixed_width: int,
+            unbind_fn: Callable | None = None,
         ) -> None:
             """Add a column with a SignalListItemFactory."""
             factory = Gtk.SignalListItemFactory()
             factory.connect("setup", setup_fn)
             factory.connect("bind", bind_fn)
+            if unbind_fn is not None:
+                factory.connect("unbind", unbind_fn)
             column = Gtk.ColumnViewColumn(title=title, factory=factory)
             column.set_fixed_width(fixed_width)
             self._column_view.append_column(column)
@@ -632,7 +676,7 @@ if _GTK_AVAILABLE:
         def _setup_text(self, factory, list_item):
             label = Gtk.Label()
             label.set_halign(Gtk.Align.START)
-            label.set_ellipsize(3)  # Pango.EllipsizeMode.END
+            label.set_ellipsize(Pango.EllipsizeMode.END)
             list_item.set_child(label)
 
         def _setup_amount(self, factory, list_item):
@@ -675,8 +719,20 @@ if _GTK_AVAILABLE:
             row: TransactionRow = list_item.get_item()
             button: Gtk.Button = list_item.get_child()
             button.set_label(row.konto_display)
-            button.connect("clicked", self._on_konto_clicked, row)
+            # Disconnect any previous handler to prevent stacking on recycled items
+            if hasattr(list_item, "_konto_handler_id") and list_item._konto_handler_id:
+                button.disconnect(list_item._konto_handler_id)
+            list_item._konto_handler_id = button.connect(
+                "clicked", self._on_konto_clicked, row
+            )
             self._apply_row_styling(button, row)
+
+        def _unbind_konto(self, factory, list_item):
+            """Disconnect the konto button signal handler on unbind."""
+            button: Gtk.Button = list_item.get_child()
+            if hasattr(list_item, "_konto_handler_id") and list_item._konto_handler_id:
+                button.disconnect(list_item._konto_handler_id)
+                list_item._konto_handler_id = None
 
         def _bind_moms(self, factory, list_item):
             row: TransactionRow = list_item.get_item()
@@ -715,7 +771,7 @@ if _GTK_AVAILABLE:
             box.set_margin_bottom(8)
 
             search_entry = Gtk.SearchEntry()
-            search_entry.set_placeholder_text("Sok konto...")
+            search_entry.set_placeholder_text("Sök konto...")
             box.append(search_entry)
 
             filter_model = Gtk.FilterListModel(model=self._account_store)
@@ -782,9 +838,9 @@ if _GTK_AVAILABLE:
             if item is None:
                 return
 
-            from bookkeeping.categorizer import _resolve_vat_account
+            from bookkeeping.categorizer import resolve_vat_account
 
-            vat_account = _resolve_vat_account(
+            vat_account = resolve_vat_account(
                 item.vat_rate, row.transaction.amount
             )
             row.set_account(item.code, item.vat_rate, vat_account)
@@ -845,7 +901,7 @@ if _GTK_AVAILABLE:
                 if self._on_save_rules:
                     self._on_save_rules(rows)
                 self._show_success_dialog(len(entries))
-            except Exception as exc:
+            except (GnuCashError, RulesDBError) as exc:
                 self._show_error_dialog(str(exc))
 
         def _show_success_dialog(self, count: int) -> None:
@@ -872,7 +928,14 @@ if _GTK_AVAILABLE:
             dialog.set_message("Import misslyckades")
             dialog.set_detail(message)
             dialog.set_buttons(["OK"])
-            dialog.choose(self, None, None)
+            dialog.choose(self, None, self._on_error_response)
+
+        def _on_error_response(self, dialog, result) -> None:
+            """Finish the error dialog interaction."""
+            try:
+                dialog.choose_finish(result)
+            except GLib.Error:
+                pass
 
     class BokforingApp(Gtk.Application):
         """GTK4 application for transaction verification and categorization.

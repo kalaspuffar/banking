@@ -62,7 +62,7 @@ def normalize_text(text: str) -> str:
     return normalized
 
 
-def _resolve_vat_account(
+def resolve_vat_account(
     vat_rate: Decimal, amount: Decimal
 ) -> int | None:
     """Determine the appropriate BAS VAT account for a transaction.
@@ -156,7 +156,7 @@ def _build_suggestion(
     Returns:
         A fully populated CategorizationSuggestion.
     """
-    vat_account = _resolve_vat_account(rule.vat_rate, transaction.amount)
+    vat_account = resolve_vat_account(rule.vat_rate, transaction.amount)
 
     return CategorizationSuggestion(
         transaction=transaction,
@@ -197,7 +197,7 @@ def save_rule(
         amount: A representative transaction amount whose sign determines
             the VAT account direction (negative = expense, positive = income).
     """
-    vat_account = _resolve_vat_account(vat_rate, amount)
+    vat_account = resolve_vat_account(vat_rate, amount)
 
     rule = Rule(
         id=None,

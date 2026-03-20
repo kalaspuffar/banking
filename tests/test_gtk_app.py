@@ -434,3 +434,36 @@ class TestTransactionRowGObject:
         row = TransactionRow(uncategorized_suggestion)
         with pytest.raises(ValueError, match="uncategorized"):
             row.to_journal_entry()
+
+
+# ---------------------------------------------------------------------------
+# load_accounts_from_gnucash tests (require GTK4, skip if unavailable)
+# ---------------------------------------------------------------------------
+
+class TestLoadAccountsFromGnuCash:
+    """Test loading accounts from a GnuCash book."""
+
+    def test_file_not_found_raises_gnucash_error(self):
+        """A non-existent book path raises GnuCashError."""
+        _skip_if_no_gtk()
+        from bookkeeping.gtk_app import load_accounts_from_gnucash
+        from bookkeeping.models import GnuCashError
+
+        with pytest.raises(GnuCashError, match="not found"):
+            load_accounts_from_gnucash("/nonexistent/path/book.gnucash")
+
+    def test_custom_vat_rates_override_defaults(self):
+        """When vat_rates dict is provided, those rates take precedence."""
+        _skip_if_no_gtk()
+        from bookkeeping.gtk_app import AccountItem, _lookup_default_vat_rate
+
+        # Verify default for 6540 is 0.25
+        assert _lookup_default_vat_rate(6540) == Decimal("0.25")
+
+        # Verify unknown account defaults to 0.00
+        assert _lookup_default_vat_rate(9999) == Decimal("0.00")
+
+        # Verify known accounts return correct defaults
+        assert _lookup_default_vat_rate(3010) == Decimal("0.25")
+        assert _lookup_default_vat_rate(3011) == Decimal("0.12")
+        assert _lookup_default_vat_rate(3012) == Decimal("0.06")
