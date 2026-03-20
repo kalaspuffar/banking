@@ -44,6 +44,10 @@ class ConfigManager:
                 f"Failed to initialise config in {db_path}: {exc}"
             ) from exc
 
+        # Enforce owner-only permissions (NF-SEC-03) regardless of whether
+        # the database was just created or already existed.
+        self._db_path.chmod(0o600)
+
     def close(self) -> None:
         """Close the database connection."""
         self._conn.close()

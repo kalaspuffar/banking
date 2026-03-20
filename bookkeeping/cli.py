@@ -20,6 +20,19 @@ EXIT_CSV_ERROR = 1
 EXIT_GNUCASH_ERROR = 2
 EXIT_USER_CANCELLED = 3
 
+# Separate constant for usage errors to avoid conflating with CSV errors.
+# The numeric value is still 1 (standard convention for CLI usage errors),
+# but the distinct name makes intent clear at each call-site.
+EXIT_USAGE_ERROR = 1
+
+# Valid configuration keys per specification (section 5.4).
+_VALID_CONFIG_KEYS: frozenset[str] = frozenset({
+    "gnucash_book_path",
+    "company_name",
+    "org_number",
+    "company_address",
+})
+
 # Default paths
 _DEFAULT_DATA_DIR = Path.home() / ".local" / "share" / "bookkeeping"
 _DEFAULT_DB_PATH = _DEFAULT_DATA_DIR / "rules.db"
@@ -54,7 +67,7 @@ def _resolve_book_path(args_book: str | None) -> Path:
                 "Run 'bookkeeping init' or use --book.",
                 file=sys.stderr,
             )
-            sys.exit(EXIT_CSV_ERROR)
+            sys.exit(EXIT_GNUCASH_ERROR)
         book_path = Path(stored)
 
     if not book_path.is_file():
@@ -89,7 +102,7 @@ def _handle_init(args: argparse.Namespace) -> None:
 
         print("bookkeeping — First-time setup\n")
 
-        book_path = _prompt_with_default(
+        book_path = _prompt_required(
             "GnuCash book path", default_book
         )
 
@@ -133,6 +146,25 @@ def _prompt_with_default(prompt_text: str, default: str) -> str:
         user_input = input(f"  {prompt_text} [{default}]: ").strip()
         return user_input if user_input else default
     return input(f"  {prompt_text}: ").strip()
+
+
+def _prompt_required(prompt_text: str, default: str) -> str:
+    """Prompt the user for input, requiring a non-empty value.
+
+    Re-prompts until a non-empty value is provided or a default exists.
+
+    Args:
+        prompt_text: The prompt label to display.
+        default: The default value shown in brackets.
+
+    Returns:
+        A non-empty string (user input or the default).
+    """
+    while True:
+        value = _prompt_with_default(prompt_text, default)
+        if value:
+            return value
+        print(f"    (required) Please enter a value for {prompt_text}.")
 
 
 def _handle_import(args: argparse.Namespace) -> None:
@@ -289,15 +321,19 @@ def _write_and_log(
 ) -> None:
     """Write transactions to GnuCash and log the import."""
     from bookkeeping.gnucash_writer import write_transactions
-    from bookkeeping.gtk_app import build_journal_entry
+    from bookkeeping.journal import build_journal_entry
 
     entries = []
+    skipped_count = 0
     errors_count = 0
     for txn, suggestion in zip(transactions, suggestions):
         if suggestion and suggestion.confidence != "none":
             try:
                 entry = build_journal_entry(
-                    transaction=txn,
+                    verification_number=txn.verification_number,
+                    booking_date=txn.booking_date,
+                    description=txn.text,
+                    amount=txn.amount,
                     debit_account=suggestion.debit_account,
                     credit_account=suggestion.credit_account,
                     vat_rate=suggestion.vat_rate,
@@ -307,6 +343,14 @@ def _write_and_log(
             except Exception as exc:
                 print(f"  Error building entry for {txn.text}: {exc}", file=sys.stderr)
                 errors_count += 1
+        else:
+            skipped_count += 1
+
+    if skipped_count:
+        print(
+            f"Warning: {skipped_count} uncategorized transaction(s) will be skipped.",
+            file=sys.stderr,
+        )
 
     if entries:
         result = write_transactions(book_path, entries)
@@ -331,38 +375,19 @@ def _log_import(
     transactions_dup: int,
     transactions_error: int,
 ) -> None:
-    """Record an import operation in the import_log table."""
-    import sqlite3
+    """Record an import operation in the import_log table via RulesDatabase."""
+    from bookkeeping.rules_db import RulesDatabase
 
     try:
-        conn = sqlite3.connect(str(_DEFAULT_DB_PATH))
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS import_log ("
-            "    id                  INTEGER PRIMARY KEY AUTOINCREMENT,"
-            "    import_date         TEXT NOT NULL DEFAULT (datetime('now')),"
-            "    csv_filename        TEXT NOT NULL,"
-            "    transactions_total  INTEGER NOT NULL,"
-            "    transactions_new    INTEGER NOT NULL,"
-            "    transactions_dup    INTEGER NOT NULL,"
-            "    transactions_error  INTEGER NOT NULL"
-            ")"
-        )
-        conn.execute(
-            "INSERT INTO import_log "
-            "(csv_filename, transactions_total, transactions_new, "
-            "transactions_dup, transactions_error) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (
-                csv_path.name,
-                transactions_total,
-                transactions_new,
-                transactions_dup,
-                transactions_error,
-            ),
-        )
-        conn.commit()
-        conn.close()
-    except sqlite3.Error as exc:
+        with RulesDatabase(_DEFAULT_DB_PATH) as db:
+            db.log_import(
+                csv_filename=csv_path.name,
+                transactions_total=transactions_total,
+                transactions_new=transactions_new,
+                transactions_dup=transactions_dup,
+                transactions_error=transactions_error,
+            )
+    except Exception as exc:
         print(f"Warning: Failed to log import: {exc}", file=sys.stderr)
 
 
@@ -371,7 +396,7 @@ def _handle_report(args: argparse.Namespace) -> None:
     from bookkeeping.reports import VALID_REPORT_TYPES, generate_report
 
     book_path = _resolve_book_path(args.book)
-    fiscal_year = int(args.year)
+    fiscal_year = args.year
 
     output_dir = Path(args.output_dir) if args.output_dir else _DEFAULT_OUTPUT_DIR
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -401,8 +426,6 @@ def _handle_report(args: argparse.Namespace) -> None:
 
 def _handle_rules(args: argparse.Namespace) -> None:
     """Handle rules subcommands."""
-    from bookkeeping.rules_db import RulesDatabase
-
     if args.rules_command == "list":
         _handle_rules_list()
     elif args.rules_command == "delete":
@@ -413,7 +436,7 @@ def _handle_rules(args: argparse.Namespace) -> None:
         _handle_rules_import(args.file)
     else:
         print("Error: Specify a rules subcommand (list, delete, export, import).", file=sys.stderr)
-        sys.exit(EXIT_CSV_ERROR)
+        sys.exit(EXIT_USAGE_ERROR)
 
 
 def _handle_rules_list() -> None:
@@ -473,7 +496,7 @@ def _handle_rules_import(filepath: str) -> None:
     path = Path(filepath)
     if not path.is_file():
         print(f"Error: File not found: {filepath}", file=sys.stderr)
-        sys.exit(EXIT_CSV_ERROR)
+        sys.exit(EXIT_USAGE_ERROR)
 
     with RulesDatabase(_DEFAULT_DB_PATH) as db:
         db.import_rules(path)
@@ -488,7 +511,7 @@ def _handle_config(args: argparse.Namespace) -> None:
         _handle_config_set(args.key, args.value)
     else:
         print("Error: Specify a config subcommand (show, set).", file=sys.stderr)
-        sys.exit(EXIT_CSV_ERROR)
+        sys.exit(EXIT_USAGE_ERROR)
 
 
 def _handle_config_show() -> None:
@@ -506,7 +529,20 @@ def _handle_config_show() -> None:
 
 
 def _handle_config_set(key: str, value: str) -> None:
-    """Set a configuration value."""
+    """Set a configuration value after validating the key.
+
+    Args:
+        key: Configuration key (must be one of the spec-defined keys).
+        value: Value to store.
+    """
+    if key not in _VALID_CONFIG_KEYS:
+        print(
+            f"Warning: '{key}' is not a recognized config key. "
+            f"Valid keys: {', '.join(sorted(_VALID_CONFIG_KEYS))}",
+            file=sys.stderr,
+        )
+        sys.exit(EXIT_USAGE_ERROR)
+
     with _get_config_manager() as cm:
         cm.set(key, value)
     print(f"Set {key} = {value}")
@@ -560,7 +596,7 @@ def _build_parser() -> argparse.ArgumentParser:
         choices=["moms", "ne", "grundbok", "huvudbok", "all"],
         help="Report type to generate",
     )
-    report_parser.add_argument("year", help="Fiscal year (e.g. 2025)")
+    report_parser.add_argument("year", type=int, help="Fiscal year (e.g. 2025)")
     report_parser.add_argument(
         "--book", default=None, help="Path to the GnuCash book file"
     )
@@ -622,7 +658,7 @@ def main() -> None:
 
     if not args.command:
         parser.print_help()
-        sys.exit(EXIT_CSV_ERROR)
+        sys.exit(EXIT_USAGE_ERROR)
 
     try:
         args.handler(args)

@@ -19,6 +19,7 @@ from bookkeeping.cli import (
     EXIT_CSV_ERROR,
     EXIT_GNUCASH_ERROR,
     EXIT_SUCCESS,
+    EXIT_USAGE_ERROR,
     EXIT_USER_CANCELLED,
     _build_parser,
     _handle_config,
@@ -63,11 +64,20 @@ class TestArgumentParsing:
         args = self.parser.parse_args(["report", "moms", "2025"])
         assert args.command == "report"
         assert args.type == "moms"
-        assert args.year == "2025"
+        assert args.year == 2025
 
     def test_report_all_type(self) -> None:
         args = self.parser.parse_args(["report", "all", "2024"])
         assert args.type == "all"
+
+    def test_report_year_is_int(self) -> None:
+        args = self.parser.parse_args(["report", "moms", "2025"])
+        assert args.year == 2025
+        assert isinstance(args.year, int)
+
+    def test_report_invalid_year_raises(self) -> None:
+        with pytest.raises(SystemExit):
+            self.parser.parse_args(["report", "moms", "notayear"])
 
     def test_report_invalid_type_raises(self) -> None:
         with pytest.raises(SystemExit):
@@ -204,6 +214,18 @@ class TestConfigCommands:
         captured = capsys.readouterr()
         assert "company_name" in captured.out
         assert "TestCo" in captured.out
+
+    def test_config_set_invalid_key_exits(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        db_path = tmp_path / "rules.db"
+        monkeypatch.setattr("bookkeeping.cli._DEFAULT_DB_PATH", db_path)
+
+        parser = _build_parser()
+        args = parser.parse_args(["config", "set", "comapny_name", "Typo"])
+
+        with pytest.raises(SystemExit) as exc_info:
+            _handle_config(args)
+
+        assert exc_info.value.code == EXIT_USAGE_ERROR
 
     def test_config_show_empty(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture) -> None:
         db_path = tmp_path / "rules.db"
@@ -354,9 +376,9 @@ class TestExitCodes:
 
         assert exc_info.value.code == EXIT_GNUCASH_ERROR
 
-    def test_no_command_exits_1(self) -> None:
+    def test_no_command_exits_with_usage_error(self) -> None:
         with pytest.raises(SystemExit) as exc_info:
             with patch("sys.argv", ["bookkeeping"]):
                 main()
 
-        assert exc_info.value.code == EXIT_CSV_ERROR
+        assert exc_info.value.code == EXIT_USAGE_ERROR
