@@ -90,6 +90,44 @@ def resolve_vat_account(
     return rate_accounts[direction]
 
 
+def _try_match(
+    transaction: BankTransaction,
+    text: str,
+    rules_db: RulesDatabase,
+) -> CategorizationSuggestion | None:
+    """Attempt to match a text string against the rules database.
+
+    Tries an exact match first, then a contains match on both the raw and
+    normalized (date-suffix-stripped) versions of the text.
+
+    Args:
+        transaction: The originating bank transaction.
+        text: The text to match against rule patterns.
+        rules_db: The rules database to search.
+
+    Returns:
+        A CategorizationSuggestion if a rule matches, otherwise None.
+    """
+    rule = rules_db.find_rule(text)
+    if rule and rule.match_type == "exact":
+        return _build_suggestion(transaction, rule, confidence="exact")
+
+    # Try normalized text (date-suffix-stripped, lowercased)
+    normalized = normalize_text(text)
+    if normalized != text:
+        rule_from_normalized = rules_db.find_rule(normalized)
+        if rule_from_normalized:
+            return _build_suggestion(
+                transaction, rule_from_normalized, confidence="pattern"
+            )
+
+    # The first find_rule call may have returned a contains match
+    if rule:
+        return _build_suggestion(transaction, rule, confidence="pattern")
+
+    return None
+
+
 def suggest_categorization(
     transaction: BankTransaction,
     rules_db: RulesDatabase,
@@ -117,24 +155,20 @@ def suggest_categorization(
         A CategorizationSuggestion with account mappings, VAT info, and
         confidence level, or None if no rule matches.
     """
-    # Use display_text (alias-rewritten) when available, otherwise raw text.
-    effective_text = transaction.display_text or transaction.text
+    # Try matching against the original bank text first, then fall back
+    # to display_text (alias-rewritten) so that rules work regardless of
+    # whether they target the raw bank code or the human-readable alias.
+    raw_text = transaction.text
 
-    # Priority 1: exact match on full effective text
-    rule = rules_db.find_rule(effective_text)
-    if rule and rule.match_type == "exact":
-        return _build_suggestion(transaction, rule, confidence="exact")
+    result = _try_match(transaction, raw_text, rules_db)
+    if result is not None:
+        return result
 
-    # Priority 2: contains match on normalized text (date-suffix-stripped)
-    normalized = normalize_text(effective_text)
-    if normalized != effective_text:
-        rule = rules_db.find_rule(normalized)
-        if rule:
-            return _build_suggestion(transaction, rule, confidence="pattern")
-
-    # The first find_rule call may have returned a contains match already
-    if rule:
-        return _build_suggestion(transaction, rule, confidence="pattern")
+    # Fall back to display_text when available (alias-rewritten text)
+    if transaction.display_text:
+        result = _try_match(transaction, transaction.display_text, rules_db)
+        if result is not None:
+            return result
 
     return None
 

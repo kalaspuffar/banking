@@ -312,7 +312,8 @@ def _print_dry_run_summary(
     print("\n--- Dry-run summary ---")
     for txn, suggestion in zip(transactions, suggestions):
         status = "→ categorized" if (suggestion and suggestion.confidence != "none") else "→ uncategorized"
-        print(f"  {txn.booking_date}  {txn.amount:>10}  {txn.text[:40]:<40}  {status}")
+        display = (txn.display_text or txn.text)[:40]
+        print(f"  {txn.booking_date}  {txn.amount:>10}  {display:<40}  {status}")
     print(f"\nTotal: {len(transactions)} transactions would be imported.")
 
 
@@ -329,7 +330,8 @@ def _handle_import_no_gui(
             acct = f"debit={suggestion.debit_account} credit={suggestion.credit_account}"
         else:
             acct = "uncategorized"
-        print(f"  {i}. {txn.booking_date}  {txn.amount:>10}  {txn.text[:40]:<40}  {acct}")
+        display = (txn.display_text or txn.text)[:40]
+        print(f"  {i}. {txn.booking_date}  {txn.amount:>10}  {display:<40}  {acct}")
 
     try:
         confirm = input("\nProceed with import? [y/N]: ").strip().lower()

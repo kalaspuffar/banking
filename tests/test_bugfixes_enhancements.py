@@ -123,10 +123,10 @@ class TestCategorizationWithDisplayText:
         assert result is not None
         assert result.debit_account == 6540
 
-    def test_no_match_on_original_text_when_display_text_set(
+    def test_matches_original_text_even_when_display_text_set(
         self, rules_db: RulesDatabase
     ) -> None:
-        """Rules matching original text should NOT match when display_text is set."""
+        """Rules matching original text should still work when display_text is set."""
         save_rule(
             rules_db,
             pattern="8001-12345",
@@ -139,9 +139,10 @@ class TestCategorizationWithDisplayText:
             text="8001-12345/26-01-15",
             display_text="Elbolaget AB",
         )
-        # Should NOT match because categorizer uses display_text, not raw text
+        # Should match because categorizer tries raw text first, then display_text
         result = suggest_categorization(txn, rules_db)
-        assert result is None
+        assert result is not None
+        assert result.debit_account == 6200
 
 
 # ---------------------------------------------------------------------------
