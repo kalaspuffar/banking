@@ -213,10 +213,12 @@ def _prompt_required(prompt_text: str, default: str) -> str:
 
 def _handle_import(args: argparse.Namespace) -> None:
     """Run the import pipeline."""
+    from decimal import Decimal
+
     from bookkeeping.categorizer import apply_aliases, suggest_categorization
     from bookkeeping.csv_parser import parse_bank_csv
     from bookkeeping.dedup import filter_duplicates
-    from bookkeeping.models import BankTransaction
+    from bookkeeping.models import BankTransaction, CategorizationSuggestion
     from bookkeeping.rules_db import RulesDatabase
 
     csv_path = Path(args.csv_file)
@@ -259,11 +261,29 @@ def _handle_import(args: argparse.Namespace) -> None:
                 aliased_transactions.append(t)
             new_transactions = aliased_transactions
 
-        suggestions = [
+        raw_suggestions = [
             suggest_categorization(t, rules_db) for t in new_transactions
         ]
 
-    categorized = sum(1 for s in suggestions if s is not None and s.confidence != "none")
+    # Wrap unmatched transactions in a "none" confidence placeholder so that
+    # every entry in the list is a CategorizationSuggestion (the GTK GUI's
+    # TransactionRow requires a non-None suggestion object).
+    suggestions: list[CategorizationSuggestion] = []
+    for txn, raw in zip(new_transactions, raw_suggestions):
+        if raw is not None:
+            suggestions.append(raw)
+        else:
+            suggestions.append(CategorizationSuggestion(
+                transaction=txn,
+                debit_account=0,
+                credit_account=0,
+                vat_rate=Decimal("0.00"),
+                vat_account=None,
+                confidence="none",
+                rule_id=None,
+            ))
+
+    categorized = sum(1 for s in suggestions if s.confidence != "none")
     print(f"  {categorized}/{len(suggestions)} categorized by rules")
 
     if args.dry_run:
