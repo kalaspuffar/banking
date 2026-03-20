@@ -19,7 +19,7 @@
         {% for row in rows %}
         <tr>
             <td>{{ row.verifikation }}</td>
-            <td>{{ row.datum }}</td>
+            <td>{{ row.datum.strftime('%Y-%m-%d') }}</td>
             <td>{{ row.text }}</td>
             <td>{{ row.konto_code }} {{ row.konto_name }}</td>
             <td class="amount">{% if row.debet %}{{ row.debet|sek }}{% endif %}</td>

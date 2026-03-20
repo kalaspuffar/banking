@@ -55,7 +55,7 @@
             </tr>
             {% for txn in account.transactions %}
             <tr>
-                <td>{{ txn.datum }}</td>
+                <td>{{ txn.datum.strftime('%Y-%m-%d') }}</td>
                 <td>{{ txn.verifikation }}</td>
                 <td>{{ txn.text }}</td>
                 <td class="amount">{% if txn.debet %}{{ txn.debet|sek }}{% endif %}</td>

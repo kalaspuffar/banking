@@ -17,16 +17,16 @@ import pytest
 from bookkeeping.models import CompanyInfo
 from bookkeeping.reports import (
     VALID_REPORT_TYPES,
+    aggregate_by_account,
     generate_report,
-    _aggregate_by_account,
-    _prepare_grundbok_data,
-    _prepare_huvudbok_data,
-    _prepare_moms_data,
-    _prepare_ne_data,
-    _round_ore,
-    _sum_by_exact_accounts,
-    _sum_by_prefix,
-    _sum_by_range,
+    prepare_grundbok_data,
+    prepare_huvudbok_data,
+    prepare_moms_data,
+    prepare_ne_data,
+    round_ore,
+    sum_by_exact_accounts,
+    sum_by_prefix,
+    sum_by_range,
 )
 
 ZERO = Decimal("0.00")
@@ -213,30 +213,30 @@ def gnucash_book(tmp_path: Path) -> Path:
 class TestAggregationHelpers:
     """Tests for the account aggregation helper functions."""
 
-    def test_sum_by_prefix(self) -> None:
+    def testsum_by_prefix(self) -> None:
         totals = {"3010": Decimal("8000"), "3040": Decimal("6000"), "6212": Decimal("800")}
-        result = _sum_by_prefix(totals, [30])
+        result = sum_by_prefix(totals, [30])
         assert result == Decimal("14000")
 
-    def test_sum_by_range(self) -> None:
+    def testsum_by_range(self) -> None:
         totals = {
             "5010": Decimal("100"),
             "6212": Decimal("800"),
             "6540": Decimal("1200"),
             "7910": Decimal("500"),
         }
-        result = _sum_by_range(totals, [(5000, 6999)])
+        result = sum_by_range(totals, [(5000, 6999)])
         assert result == Decimal("2100")
 
-    def test_sum_by_exact_accounts(self) -> None:
+    def testsum_by_exact_accounts(self) -> None:
         totals = {"2610": Decimal("-2000"), "2640": Decimal("500")}
-        result = _sum_by_exact_accounts(totals, [2610])
+        result = sum_by_exact_accounts(totals, [2610])
         assert result == Decimal("-2000")
 
-    def test_round_ore(self) -> None:
-        assert _round_ore(Decimal("100.005")) == Decimal("100.00")  # banker's rounding
-        assert _round_ore(Decimal("100.015")) == Decimal("100.02")  # banker's rounding
-        assert _round_ore(Decimal("100.125")) == Decimal("100.12")
+    def testround_ore(self) -> None:
+        assert round_ore(Decimal("100.005")) == Decimal("100.00")  # banker's rounding
+        assert round_ore(Decimal("100.015")) == Decimal("100.02")  # banker's rounding
+        assert round_ore(Decimal("100.125")) == Decimal("100.12")
 
 
 # ---------------------------------------------------------------------------
@@ -249,32 +249,32 @@ class TestMomsdeklaration:
 
     def test_ruta_05_taxable_sales_25(self, gnucash_book: Path) -> None:
         """Ruta 05: account 3010 has -8000 credit → shows 8000 positive."""
-        data = _prepare_moms_data(gnucash_book, 2025)
+        data = prepare_moms_data(gnucash_book, 2025)
         assert data["rutor"]["05"] == Decimal("8000.00")
 
     def test_ruta_08_vat_free_sales(self, gnucash_book: Path) -> None:
         """Ruta 08: account 3040 has -6000 credit → shows 6000 positive."""
-        data = _prepare_moms_data(gnucash_book, 2025)
+        data = prepare_moms_data(gnucash_book, 2025)
         assert data["rutor"]["08"] == Decimal("6000.00")
 
     def test_ruta_10_output_vat_25(self, gnucash_book: Path) -> None:
         """Ruta 10: account 2610 has -2000 credit → shows 2000 positive."""
-        data = _prepare_moms_data(gnucash_book, 2025)
+        data = prepare_moms_data(gnucash_book, 2025)
         assert data["rutor"]["10"] == Decimal("2000.00")
 
     def test_ruta_48_input_vat(self, gnucash_book: Path) -> None:
         """Ruta 48: account 2640 has 200+300=500 debit → shows 500 positive."""
-        data = _prepare_moms_data(gnucash_book, 2025)
+        data = prepare_moms_data(gnucash_book, 2025)
         assert data["rutor"]["48"] == Decimal("500.00")
 
     def test_ruta_49_vat_to_pay(self, gnucash_book: Path) -> None:
         """Ruta 49: output VAT (2000) minus input VAT (500) = 1500."""
-        data = _prepare_moms_data(gnucash_book, 2025)
+        data = prepare_moms_data(gnucash_book, 2025)
         assert data["rutor"]["49"] == Decimal("1500.00")
 
     def test_ruta_rows_complete(self, gnucash_book: Path) -> None:
         """All expected rutor are present in the ruta_rows list."""
-        data = _prepare_moms_data(gnucash_book, 2025)
+        data = prepare_moms_data(gnucash_book, 2025)
         ruta_nums = [r["ruta"] for r in data["ruta_rows"]]
         assert ruta_nums == ["05", "06", "07", "08", "10", "11", "12", "48", "49"]
 
@@ -289,37 +289,37 @@ class TestNEBilaga:
 
     def test_r1_net_revenue(self, gnucash_book: Path) -> None:
         """R1: 30xx accounts total -8000-6000=-14000 → negate → 14000."""
-        data = _prepare_ne_data(gnucash_book, 2025)
+        data = prepare_ne_data(gnucash_book, 2025)
         assert data["rutor"]["R1"] == Decimal("14000.00")
 
     def test_r2_other_income(self, gnucash_book: Path) -> None:
         """R2: no 37xx-39xx accounts → 0."""
-        data = _prepare_ne_data(gnucash_book, 2025)
+        data = prepare_ne_data(gnucash_book, 2025)
         assert data["rutor"]["R2"] == ZERO
 
     def test_r5_external_costs(self, gnucash_book: Path) -> None:
         """R5: 50xx-69xx accounts: 6212=800 + 6540=1200 = 2000."""
-        data = _prepare_ne_data(gnucash_book, 2025)
+        data = prepare_ne_data(gnucash_book, 2025)
         assert data["rutor"]["R5"] == Decimal("2000.00")
 
     def test_r6_other_costs(self, gnucash_book: Path) -> None:
         """R6: no 79xx accounts → 0."""
-        data = _prepare_ne_data(gnucash_book, 2025)
+        data = prepare_ne_data(gnucash_book, 2025)
         assert data["rutor"]["R6"] == ZERO
 
     def test_r7_book_result(self, gnucash_book: Path) -> None:
         """R7: R1+R2-R5-R6 = 14000+0-2000-0 = 12000."""
-        data = _prepare_ne_data(gnucash_book, 2025)
+        data = prepare_ne_data(gnucash_book, 2025)
         assert data["rutor"]["R7"] == Decimal("12000.00")
 
     def test_b1_opening_equity(self, gnucash_book: Path) -> None:
         """B1: account 2010 balance before 2025 = -50000 → negate → 50000."""
-        data = _prepare_ne_data(gnucash_book, 2025)
+        data = prepare_ne_data(gnucash_book, 2025)
         assert data["rutor"]["B1"] == Decimal("50000.00")
 
     def test_b4_closing_equity(self, gnucash_book: Path) -> None:
         """B4: account 2010 balance through 2025 = -50000 (no FY entries) → negate → 50000."""
-        data = _prepare_ne_data(gnucash_book, 2025)
+        data = prepare_ne_data(gnucash_book, 2025)
         assert data["rutor"]["B4"] == Decimal("50000.00")
 
 
@@ -333,30 +333,30 @@ class TestGrundbok:
 
     def test_grand_totals_balanced(self, gnucash_book: Path) -> None:
         """Total debet must equal total kredit (double-entry balanced)."""
-        data = _prepare_grundbok_data(gnucash_book, 2025)
+        data = prepare_grundbok_data(gnucash_book, 2025)
         assert data["grand_total_debet"] == data["grand_total_kredit"]
 
     def test_rows_sorted_by_date(self, gnucash_book: Path) -> None:
         """Rows are sorted chronologically by date."""
-        data = _prepare_grundbok_data(gnucash_book, 2025)
+        data = prepare_grundbok_data(gnucash_book, 2025)
         dates = [r["datum"] for r in data["rows"]]
         assert dates == sorted(dates)
 
     def test_all_fiscal_year_transactions_present(self, gnucash_book: Path) -> None:
         """All 4 FY 2025 transactions are present (with multiple splits each)."""
-        data = _prepare_grundbok_data(gnucash_book, 2025)
+        data = prepare_grundbok_data(gnucash_book, 2025)
         verifikations = {r["verifikation"] for r in data["rows"]}
         assert verifikations == {"V1001", "V1002", "V1003", "V1004"}
 
     def test_prior_year_excluded(self, gnucash_book: Path) -> None:
         """The 2024 opening equity transaction is not in the 2025 grundbok."""
-        data = _prepare_grundbok_data(gnucash_book, 2025)
+        data = prepare_grundbok_data(gnucash_book, 2025)
         verifikations = {r["verifikation"] for r in data["rows"]}
         assert "V0001" not in verifikations
 
     def test_grand_totals_correct(self, gnucash_book: Path) -> None:
         """Grand totals match the sum of all debet/kredit in the rows."""
-        data = _prepare_grundbok_data(gnucash_book, 2025)
+        data = prepare_grundbok_data(gnucash_book, 2025)
         expected_debet = sum((r["debet"] for r in data["rows"]), ZERO)
         expected_kredit = sum((r["kredit"] for r in data["rows"]), ZERO)
         assert data["grand_total_debet"] == expected_debet
@@ -373,13 +373,13 @@ class TestHuvudbok:
 
     def test_accounts_sorted_by_code(self, gnucash_book: Path) -> None:
         """Account sections are sorted by account number ascending."""
-        data = _prepare_huvudbok_data(gnucash_book, 2025)
+        data = prepare_huvudbok_data(gnucash_book, 2025)
         codes = [a["code"] for a in data["accounts"]]
         assert codes == sorted(codes)
 
     def test_opening_plus_activity_equals_closing(self, gnucash_book: Path) -> None:
         """For each account: opening + debet - kredit = closing."""
-        data = _prepare_huvudbok_data(gnucash_book, 2025)
+        data = prepare_huvudbok_data(gnucash_book, 2025)
         for account in data["accounts"]:
             expected_closing = (
                 account["opening_balance"]
@@ -396,20 +396,20 @@ class TestHuvudbok:
 
     def test_bank_account_opening_balance(self, gnucash_book: Path) -> None:
         """Account 1930 has opening balance of 50,000 from prior year."""
-        data = _prepare_huvudbok_data(gnucash_book, 2025)
+        data = prepare_huvudbok_data(gnucash_book, 2025)
         bank = next(a for a in data["accounts"] if a["code"] == "1930")
         assert bank["opening_balance"] == Decimal("50000.00")
 
     def test_all_active_accounts_present(self, gnucash_book: Path) -> None:
         """All accounts with FY 2025 activity are represented."""
-        data = _prepare_huvudbok_data(gnucash_book, 2025)
+        data = prepare_huvudbok_data(gnucash_book, 2025)
         codes = {a["code"] for a in data["accounts"]}
         expected = {"1930", "2610", "2640", "3010", "3040", "6212", "6540"}
         assert codes == expected
 
     def test_account_transactions_sorted(self, gnucash_book: Path) -> None:
         """Transactions within each account are sorted by date."""
-        data = _prepare_huvudbok_data(gnucash_book, 2025)
+        data = prepare_huvudbok_data(gnucash_book, 2025)
         for account in data["accounts"]:
             dates = [t["datum"] for t in account["transactions"]]
             assert dates == sorted(dates), f"Account {account['code']} not sorted"

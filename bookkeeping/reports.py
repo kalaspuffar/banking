@@ -13,6 +13,8 @@ via WeasyPrint.
 
 from __future__ import annotations
 
+import functools
+import logging
 from datetime import date
 from decimal import Decimal, ROUND_HALF_EVEN
 from pathlib import Path
@@ -21,6 +23,8 @@ from typing import Any
 import jinja2
 import piecash
 import weasyprint
+
+logger = logging.getLogger(__name__)
 
 from bookkeeping.models import CompanyInfo
 
@@ -103,6 +107,8 @@ def generate_report(
 
     Args:
         report_type: One of "moms", "ne", "grundbok", "huvudbok".
+            Note: "all" is not handled here — it should be handled by the CLI
+            caller by looping over all four individual types.
         gnucash_book_path: Path to the GnuCash SQLite book file.
         fiscal_year: The fiscal year to report on (e.g., 2025).
         output_path: Where to write the generated PDF.
@@ -121,10 +127,10 @@ def generate_report(
         )
 
     dispatcher = {
-        "moms": _prepare_moms_data,
-        "ne": _prepare_ne_data,
-        "grundbok": _prepare_grundbok_data,
-        "huvudbok": _prepare_huvudbok_data,
+        "moms": prepare_moms_data,
+        "ne": prepare_ne_data,
+        "grundbok": prepare_grundbok_data,
+        "huvudbok": prepare_huvudbok_data,
     }
 
     template_names = {
@@ -176,7 +182,7 @@ def _query_splits_for_fiscal_year(
     return splits
 
 
-def _aggregate_by_account(
+def aggregate_by_account(
     splits: list[piecash.Split],
 ) -> dict[str, Decimal]:
     """Sum split amounts grouped by account code.
@@ -197,7 +203,7 @@ def _aggregate_by_account(
     return totals
 
 
-def _sum_by_prefix(
+def sum_by_prefix(
     account_totals: dict[str, Decimal], prefixes: list[int]
 ) -> Decimal:
     """Sum account totals for accounts matching any of the given prefixes.
@@ -217,7 +223,7 @@ def _sum_by_prefix(
     return total
 
 
-def _sum_by_range(
+def sum_by_range(
     account_totals: dict[str, Decimal],
     ranges: list[tuple[int, int]],
 ) -> Decimal:
@@ -243,7 +249,7 @@ def _sum_by_range(
     return total
 
 
-def _sum_by_exact_accounts(
+def sum_by_exact_accounts(
     account_totals: dict[str, Decimal], accounts: list[int]
 ) -> Decimal:
     """Sum account totals for specific account codes.
@@ -261,7 +267,7 @@ def _sum_by_exact_accounts(
     return total
 
 
-def _round_ore(amount: Decimal) -> Decimal:
+def round_ore(amount: Decimal) -> Decimal:
     """Round to öre (2 decimal places) using banker's rounding."""
     return amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_EVEN)
 
@@ -271,7 +277,7 @@ def _round_ore(amount: Decimal) -> Decimal:
 # ---------------------------------------------------------------------------
 
 
-def _prepare_moms_data(
+def prepare_moms_data(
     gnucash_book_path: Path, fiscal_year: int
 ) -> dict[str, Any]:
     """Query GnuCash and return momsdeklaration ruta→amount mapping.
@@ -283,25 +289,32 @@ def _prepare_moms_data(
     """
     with piecash.open_book(str(gnucash_book_path), readonly=True, open_if_lock=True) as book:
         splits = _query_splits_for_fiscal_year(book, fiscal_year)
-        account_totals = _aggregate_by_account(splits)
+        account_totals = aggregate_by_account(splits)
+
+    if not account_totals:
+        logger.warning(
+            "No transactions found for fiscal year %d. "
+            "The momsdeklaration report will contain all-zero values.",
+            fiscal_year,
+        )
 
     rutor: dict[str, Decimal] = {}
     for ruta, accounts in MOMS_RUTA_ACCOUNTS.items():
-        raw = _sum_by_exact_accounts(account_totals, accounts)
+        raw = sum_by_exact_accounts(account_totals, accounts)
         # Revenue and output VAT accounts are credit accounts in GnuCash
         # (stored as negative). Negate to show positive on the form.
         # Input VAT (ruta 48, account 2640) is a debit account (positive).
         if ruta in ("05", "06", "07", "08", "10", "11", "12"):
-            rutor[ruta] = _round_ore(-raw)
+            rutor[ruta] = round_ore(-raw)
         else:
-            rutor[ruta] = _round_ore(raw)
+            rutor[ruta] = round_ore(raw)
 
     # Ruta 49: output VAT minus input VAT
     output_vat = (
         rutor.get("10", ZERO) + rutor.get("11", ZERO) + rutor.get("12", ZERO)
     )
     input_vat = rutor.get("48", ZERO)
-    rutor["49"] = _round_ore(output_vat - input_vat)
+    rutor["49"] = round_ore(output_vat - input_vat)
 
     ruta_rows = []
     for ruta_num in ["05", "06", "07", "08", "10", "11", "12", "48", "49"]:
@@ -347,7 +360,7 @@ def _compute_account_balance_at_date(
     return balance
 
 
-def _prepare_ne_data(
+def prepare_ne_data(
     gnucash_book_path: Path, fiscal_year: int
 ) -> dict[str, Any]:
     """Query GnuCash and return NE-bilaga ruta→amount mapping.
@@ -360,7 +373,14 @@ def _prepare_ne_data(
 
     with piecash.open_book(str(gnucash_book_path), readonly=True, open_if_lock=True) as book:
         splits = _query_splits_for_fiscal_year(book, fiscal_year)
-        account_totals = _aggregate_by_account(splits)
+        account_totals = aggregate_by_account(splits)
+
+        if not account_totals:
+            logger.warning(
+                "No transactions found for fiscal year %d. "
+                "The NE-bilaga report will contain all-zero values.",
+                fiscal_year,
+            )
 
         rutor: dict[str, Decimal] = {}
 
@@ -368,14 +388,14 @@ def _prepare_ne_data(
             ruta_type = config["type"]
 
             if ruta_type == "prefix":
-                raw = _sum_by_prefix(account_totals, config["prefixes"])
+                raw = sum_by_prefix(account_totals, config["prefixes"])
                 # Revenue accounts are negative in GnuCash; negate for display
-                rutor[ruta] = _round_ore(-raw)
+                rutor[ruta] = round_ore(-raw)
 
             elif ruta_type == "range":
-                raw = _sum_by_range(account_totals, config["ranges"])
+                raw = sum_by_range(account_totals, config["ranges"])
                 # Cost accounts are positive in GnuCash; keep as-is
-                rutor[ruta] = _round_ore(raw)
+                rutor[ruta] = round_ore(raw)
 
             elif ruta_type == "opening_balance":
                 # Balance at the day before fiscal year start
@@ -384,16 +404,16 @@ def _prepare_ne_data(
                     book, config["account"], day_before_start
                 )
                 # Equity account 2010 is credit (negative in GnuCash); negate
-                rutor[ruta] = _round_ore(-balance)
+                rutor[ruta] = round_ore(-balance)
 
             elif ruta_type == "closing_balance":
                 balance = _compute_account_balance_at_date(
                     book, config["account"], end_date
                 )
-                rutor[ruta] = _round_ore(-balance)
+                rutor[ruta] = round_ore(-balance)
 
         # R7 = R1 + R2 - R5 - R6
-        rutor["R7"] = _round_ore(
+        rutor["R7"] = round_ore(
             rutor.get("R1", ZERO)
             + rutor.get("R2", ZERO)
             - rutor.get("R5", ZERO)
@@ -431,7 +451,7 @@ def _prepare_ne_data(
 # ---------------------------------------------------------------------------
 
 
-def _prepare_grundbok_data(
+def prepare_grundbok_data(
     gnucash_book_path: Path, fiscal_year: int
 ) -> dict[str, Any]:
     """Query GnuCash and return chronological journal data.
@@ -451,8 +471,8 @@ def _prepare_grundbok_data(
 
             for split in transaction.splits:
                 amount = Decimal(str(split.value))
-                debet = _round_ore(amount) if amount > ZERO else ZERO
-                kredit = _round_ore(-amount) if amount < ZERO else ZERO
+                debet = round_ore(amount) if amount > ZERO else ZERO
+                kredit = round_ore(-amount) if amount < ZERO else ZERO
 
                 rows.append({
                     "verifikation": transaction.num or "",
@@ -464,7 +484,19 @@ def _prepare_grundbok_data(
                     "kredit": kredit,
                 })
 
+    if not rows:
+        logger.warning(
+            "No transactions found for fiscal year %d. "
+            "The grundbok report will be empty.",
+            fiscal_year,
+        )
+
     # Sort by date, then by verification number
+    # Known limitation: page-level subtotals are not implemented. The spec
+    # mentions "page totals and grand totals", but page totals require
+    # WeasyPrint CSS paged media features that are non-trivial to implement.
+    # For a small enskild firma (~200-400 transactions/year), grand totals
+    # alone are sufficient.
     rows.sort(key=lambda r: (r["datum"], r["verifikation"]))
 
     grand_total_debet = sum((r["debet"] for r in rows), ZERO)
@@ -474,8 +506,8 @@ def _prepare_grundbok_data(
         "report_title": "Grundbok",
         "fiscal_year": fiscal_year,
         "rows": rows,
-        "grand_total_debet": _round_ore(grand_total_debet),
-        "grand_total_kredit": _round_ore(grand_total_kredit),
+        "grand_total_debet": round_ore(grand_total_debet),
+        "grand_total_kredit": round_ore(grand_total_kredit),
     }
 
 
@@ -484,7 +516,7 @@ def _prepare_grundbok_data(
 # ---------------------------------------------------------------------------
 
 
-def _prepare_huvudbok_data(
+def prepare_huvudbok_data(
     gnucash_book_path: Path, fiscal_year: int
 ) -> dict[str, Any]:
     """Query GnuCash and return per-account ledger data.
@@ -501,7 +533,12 @@ def _prepare_huvudbok_data(
     account_data: dict[str, dict[str, Any]] = {}
 
     with piecash.open_book(str(gnucash_book_path), readonly=True, open_if_lock=True) as book:
-        # First pass: collect all accounts with fiscal year activity
+        # Single pass over all transactions: opening balances are computed
+        # from transactions with post_date <= day_before_start, which is O(n)
+        # over the full book history. For a small enskild firma (~200-400
+        # txns/year) this is acceptable. If performance becomes an issue with
+        # many years of data, consider precomputing opening balances in a
+        # separate pass or caching them.
         for transaction in book.transactions:
             post_date = transaction.post_date
             if not isinstance(post_date, date):
@@ -528,8 +565,8 @@ def _prepare_huvudbok_data(
                     # Contributes to opening balance
                     account_data[code]["opening_balance"] += amount
                 elif start_date <= post_date <= end_date:
-                    debet = _round_ore(amount) if amount > ZERO else ZERO
-                    kredit = _round_ore(-amount) if amount < ZERO else ZERO
+                    debet = round_ore(amount) if amount > ZERO else ZERO
+                    kredit = round_ore(-amount) if amount < ZERO else ZERO
 
                     account_data[code]["transactions"].append({
                         "datum": post_date,
@@ -550,16 +587,23 @@ def _prepare_huvudbok_data(
 
     # Compute closing balances and round
     for data in active_accounts.values():
-        data["opening_balance"] = _round_ore(data["opening_balance"])
-        data["subtotal_debet"] = _round_ore(data["subtotal_debet"])
-        data["subtotal_kredit"] = _round_ore(data["subtotal_kredit"])
-        data["closing_balance"] = _round_ore(
+        data["opening_balance"] = round_ore(data["opening_balance"])
+        data["subtotal_debet"] = round_ore(data["subtotal_debet"])
+        data["subtotal_kredit"] = round_ore(data["subtotal_kredit"])
+        data["closing_balance"] = round_ore(
             data["opening_balance"]
             + data["subtotal_debet"]
             - data["subtotal_kredit"]
         )
         # Sort transactions within account by date
         data["transactions"].sort(key=lambda t: (t["datum"], t["verifikation"]))
+
+    if not active_accounts:
+        logger.warning(
+            "No accounts with activity found for fiscal year %d. "
+            "The huvudbok report will be empty.",
+            fiscal_year,
+        )
 
     # Sort accounts by code
     sorted_accounts = sorted(active_accounts.values(), key=lambda a: a["code"])
@@ -578,6 +622,52 @@ def _prepare_huvudbok_data(
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
 
 
+def format_sek(value: Decimal) -> str:
+    """Format a Decimal as Swedish currency (space as thousands separator).
+
+    Uses string-based decimal splitting to avoid floating-point precision
+    issues that can arise with very large Decimal values when using
+    float-style formatting.
+
+    Args:
+        value: Amount in SEK as a Decimal.
+
+    Returns:
+        Formatted string with comma as decimal separator and space as
+        thousands separator (e.g., "1 234 567,89").
+    """
+    if value == ZERO:
+        return "0,00"
+
+    sign = "-" if value < 0 else ""
+    abs_val = abs(value).quantize(Decimal("0.01"), rounding=ROUND_HALF_EVEN)
+    int_part, dec_part = str(abs_val).split(".")
+
+    # Add space as thousands separator by iterating in reverse
+    int_str = ""
+    for i, ch in enumerate(reversed(int_part)):
+        if i > 0 and i % 3 == 0:
+            int_str = " " + int_str
+        int_str = ch + int_str
+
+    return f"{sign}{int_str},{dec_part}"
+
+
+@functools.lru_cache(maxsize=1)
+def _get_jinja_env() -> jinja2.Environment:
+    """Create and cache the Jinja2 environment with custom filters.
+
+    Cached so that generating multiple reports in sequence (e.g., type="all"
+    in the CLI) reuses a single environment instance.
+    """
+    env = jinja2.Environment(
+        loader=jinja2.FileSystemLoader(str(_TEMPLATES_DIR)),
+        autoescape=True,
+    )
+    env.filters["sek"] = format_sek
+    return env
+
+
 def _render_template(
     template_name: str,
     report_data: dict[str, Any],
@@ -593,29 +683,7 @@ def _render_template(
     Returns:
         Rendered HTML string.
     """
-    env = jinja2.Environment(
-        loader=jinja2.FileSystemLoader(str(_TEMPLATES_DIR)),
-        autoescape=True,
-    )
-
-    # Custom filter for Swedish currency formatting
-    def format_sek(value: Decimal) -> str:
-        """Format a Decimal as Swedish currency (space as thousands separator)."""
-        if value == ZERO:
-            return "0,00"
-        # Format with 2 decimal places, Swedish style
-        sign = "-" if value < 0 else ""
-        abs_val = abs(value)
-        integer_part = int(abs_val)
-        decimal_part = abs_val - integer_part
-        # Add space thousands separator
-        int_str = f"{integer_part:,}".replace(",", " ")
-        dec_str = f"{decimal_part:.2f}"[1:]  # ".XX"
-        dec_str = dec_str.replace(".", ",")
-        return f"{sign}{int_str}{dec_str}"
-
-    env.filters["sek"] = format_sek
-
+    env = _get_jinja_env()
     template = env.get_template(template_name)
     return template.render(
         company=company_info,
