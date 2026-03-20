@@ -9,7 +9,7 @@ Covers:
 - Multiple exact matches resolved by most recent last_used
 - save_rule persisting via RulesDatabase
 - VAT split info in suggestions (25%, 12%, 6%, and 0% cases)
-- _resolve_vat_account raising ValueError for unsupported rates
+- resolve_vat_account raising ValueError for unsupported rates
 """
 
 from __future__ import annotations
@@ -578,19 +578,19 @@ class TestExactMatchTiebreaker:
 
 
 # ---------------------------------------------------------------------------
-# _resolve_vat_account error handling (Issue #6)
+# resolve_vat_account error handling (Issue #6)
 # ---------------------------------------------------------------------------
 
 class TestResolveVATAccountErrors:
-    """Tests for _resolve_vat_account raising ValueError on unsupported rates."""
+    """Tests for resolve_vat_account raising ValueError on unsupported rates."""
 
     def test_unsupported_nonzero_rate_raises_value_error(self) -> None:
-        from bookkeeping.categorizer import _resolve_vat_account
+        from bookkeeping.categorizer import resolve_vat_account
 
         with pytest.raises(ValueError, match="Unsupported non-zero VAT rate"):
-            _resolve_vat_account(Decimal("0.10"), Decimal("-100.00"))
+            resolve_vat_account(Decimal("0.10"), Decimal("-100.00"))
 
     def test_zero_rate_returns_none(self) -> None:
-        from bookkeeping.categorizer import _resolve_vat_account
+        from bookkeeping.categorizer import resolve_vat_account
 
-        assert _resolve_vat_account(Decimal("0.00"), Decimal("-100.00")) is None
+        assert resolve_vat_account(Decimal("0.00"), Decimal("-100.00")) is None
