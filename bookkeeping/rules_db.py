@@ -307,6 +307,47 @@ class RulesDatabase:
             raise RulesDBError(f"Failed to delete rule {rule_id}: {exc}") from exc
 
     # ------------------------------------------------------------------
+    # Import logging
+    # ------------------------------------------------------------------
+
+    def log_import(
+        self,
+        csv_filename: str,
+        transactions_total: int,
+        transactions_new: int,
+        transactions_dup: int,
+        transactions_error: int,
+    ) -> None:
+        """Record an import operation in the import_log table.
+
+        Args:
+            csv_filename: Name of the imported CSV file.
+            transactions_total: Total transactions in the CSV.
+            transactions_new: New transactions written to GnuCash.
+            transactions_dup: Duplicate transactions skipped.
+            transactions_error: Transactions that failed to import.
+        """
+        try:
+            self._conn.execute(
+                "INSERT INTO import_log "
+                "(csv_filename, transactions_total, transactions_new, "
+                "transactions_dup, transactions_error) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (
+                    csv_filename,
+                    transactions_total,
+                    transactions_new,
+                    transactions_dup,
+                    transactions_error,
+                ),
+            )
+            self._conn.commit()
+        except sqlite3.Error as exc:
+            raise RulesDBError(
+                f"Failed to log import for {csv_filename!r}: {exc}"
+            ) from exc
+
+    # ------------------------------------------------------------------
     # Export / import JSON
     # ------------------------------------------------------------------
 
